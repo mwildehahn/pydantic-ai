@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from pydantic_graph import GraphRun, GraphRunResult
 
     from . import messages as _messages
-    from .tools import ObjectJsonSchema
+    from ._tool_types import ObjectJsonSchema
 
 _P = ParamSpec('_P')
 _R = TypeVar('_R')

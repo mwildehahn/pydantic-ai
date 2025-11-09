@@ -1,6 +1,7 @@
 import sys
 from datetime import datetime, timezone
 
+from pydantic_ai.builtin_tools import ImageGenerationTool
 import pytest
 from inline_snapshot import snapshot
 from pydantic import TypeAdapter
@@ -26,6 +27,7 @@ from pydantic_ai import (
     UserPromptPart,
     VideoUrl,
 )
+from pydantic_ai.models import ToolDefinition
 
 from .conftest import IsDatetime, IsNow, IsStr
 
@@ -404,7 +406,9 @@ def test_pre_usage_refactor_messages_deserializable():
                         content='What is the capital of Mexico?',
                         timestamp=IsNow(tz=timezone.utc),
                     )
-                ]
+                ],
+                function_tools=None,
+                builtin_tools=None,
             ),
             ModelResponse(
                 parts=[TextPart(content='Mexico City.')],
@@ -586,3 +590,28 @@ def test_binary_content_validation_with_optional_identifier():
             'identifier': 'foo',
         }
     )
+
+
+def test_model_request_tool_tracking_excluded_from_serialization():
+    """Test that function_tools and builtin_tools are not serialized in the request."""
+    tool_def = ToolDefinition(
+        name='test_tool',
+        description='A test tool',
+        parameters_json_schema={'type': 'object', 'properties': {}},
+    )
+
+    request = ModelRequest(
+        parts=[UserPromptPart('test prompt')],
+        instructions='test instructions',
+        function_tools=[tool_def],
+        builtin_tools=[ImageGenerationTool()],
+    )
+
+    # Verify the fields are accessible
+    assert request.function_tools == [tool_def]
+    assert request.builtin_tools == [ImageGenerationTool()]
+
+    # Serialize - fields ARE excluded
+    serialized = ModelMessagesTypeAdapter.dump_python([request], mode='json')
+    assert 'function_tools' not in serialized[0]
+    assert 'builtin_tools' not in serialized[0]

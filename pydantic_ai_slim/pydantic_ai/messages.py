@@ -16,7 +16,9 @@ from opentelemetry._events import Event  # pyright: ignore[reportPrivateImportUs
 from typing_extensions import deprecated
 
 from . import _otel_messages, _utils
+from ._tool_types import ToolDefinition
 from ._utils import generate_tool_call_id as _generate_tool_call_id, now_utc as _now_utc
+from .builtin_tools import AbstractBuiltinTool
 from .exceptions import UnexpectedModelBehavior
 from .usage import RequestUsage
 
@@ -944,6 +946,22 @@ class ModelRequest:
 
     instructions: str | None = None
     """The instructions for the model."""
+
+    function_tools: Annotated[list[ToolDefinition] | None, pydantic.Field(exclude=True, repr=False)] = field(
+        default=None, repr=False
+    )
+    """Function tools that were available for this request.
+
+    Available for introspection during a run. This field is excluded from serialization.
+    """
+
+    builtin_tools: Annotated[list[AbstractBuiltinTool] | None, pydantic.Field(exclude=True, repr=False)] = field(
+        default=None, repr=False
+    )
+    """Builtin tools that were available for this request.
+
+    Available for introspection during a run. This field is excluded from serialization.
+    """
 
     kind: Literal['request'] = 'request'
     """Message type identifier, this is available on all parts as a discriminator."""

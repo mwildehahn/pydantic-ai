@@ -492,6 +492,10 @@ class ModelRequestNode(AgentNode[DepsT, NodeRunEndT]):
 
         model_request_parameters = await _prepare_request_parameters(ctx)
 
+        # Populate tool tracking on the ModelRequest (the last request in the original history)
+        self.request.function_tools = model_request_parameters.function_tools
+        self.request.builtin_tools = model_request_parameters.builtin_tools
+
         model_settings = ctx.deps.model_settings
         usage = ctx.state.usage
         if ctx.deps.usage_limits.count_tokens_before_request:
