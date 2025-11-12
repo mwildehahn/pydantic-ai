@@ -963,6 +963,14 @@ class ModelRequest:
     Available for introspection during a run. This field is excluded from serialization.
     """
 
+    output_tools: Annotated[list[ToolDefinition] | None, pydantic.Field(exclude=True, repr=False)] = field(
+        default=None, repr=False
+    )
+    """Output tools that were available for this request.
+
+    Available for introspection during a run. This field is excluded from serialization.
+    """
+
     kind: Literal['request'] = 'request'
     """Message type identifier, this is available on all parts as a discriminator."""
 

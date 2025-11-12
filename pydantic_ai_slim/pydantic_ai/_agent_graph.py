@@ -495,6 +495,7 @@ class ModelRequestNode(AgentNode[DepsT, NodeRunEndT]):
         # Populate tool tracking on the ModelRequest (the last request in the original history)
         self.request.function_tools = model_request_parameters.function_tools
         self.request.builtin_tools = model_request_parameters.builtin_tools
+        self.request.output_tools = model_request_parameters.output_tools
 
         model_settings = ctx.deps.model_settings
         usage = ctx.state.usage

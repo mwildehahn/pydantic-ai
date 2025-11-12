@@ -593,10 +593,15 @@ def test_binary_content_validation_with_optional_identifier():
 
 
 def test_model_request_tool_tracking_excluded_from_serialization():
-    """Test that function_tools and builtin_tools are not serialized in the request."""
+    """Test that function, builtin, and output tools are not serialized in the request."""
     tool_def = ToolDefinition(
         name='test_tool',
         description='A test tool',
+        parameters_json_schema={'type': 'object', 'properties': {}},
+    )
+    output_tool_def = ToolDefinition(
+        name='request_output',
+        description='An output tool',
         parameters_json_schema={'type': 'object', 'properties': {}},
     )
 
@@ -605,13 +610,16 @@ def test_model_request_tool_tracking_excluded_from_serialization():
         instructions='test instructions',
         function_tools=[tool_def],
         builtin_tools=[ImageGenerationTool()],
+        output_tools=[output_tool_def],
     )
 
     # Verify the fields are accessible
     assert request.function_tools == [tool_def]
     assert request.builtin_tools == [ImageGenerationTool()]
+    assert request.output_tools == [output_tool_def]
 
     # Serialize - fields ARE excluded
     serialized = ModelMessagesTypeAdapter.dump_python([request], mode='json')
     assert 'function_tools' not in serialized[0]
     assert 'builtin_tools' not in serialized[0]
+    assert 'output_tools' not in serialized[0]
