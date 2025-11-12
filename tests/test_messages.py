@@ -1,7 +1,6 @@
 import sys
 from datetime import datetime, timezone
 
-from pydantic_ai.builtin_tools import ImageGenerationTool
 import pytest
 from inline_snapshot import snapshot
 from pydantic import TypeAdapter
@@ -27,6 +26,7 @@ from pydantic_ai import (
     UserPromptPart,
     VideoUrl,
 )
+from pydantic_ai.builtin_tools import ImageGenerationTool
 from pydantic_ai.models import ToolDefinition
 
 from .conftest import IsDatetime, IsNow, IsStr
