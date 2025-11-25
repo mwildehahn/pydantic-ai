@@ -423,62 +423,56 @@ def _create_validator_model(tool_name: str, tool_def: ToolDefinition) -> type[Ba
     )
 
 
+class _DynamicValue:
+    """Sentinel for values that can't be determined statically."""
+
+    pass
+
+
+# Module-level singleton for dynamic values
+_DYNAMIC = _DynamicValue()
+
+
 def _ast_value_to_python(node: ast.expr) -> Any:
     """Try to convert an AST node to a Python value for validation.
 
-    Returns the value if it can be statically determined, otherwise returns a
-    sentinel object indicating the value is dynamic.
+    Returns the value if it can be statically determined, otherwise returns
+    _DYNAMIC sentinel indicating the value is dynamic.
     """
-
-    class _DynamicValue:
-        """Sentinel for values that can't be determined statically."""
-
-        pass
-
-    DYNAMIC = _DynamicValue()
-
     if isinstance(node, ast.Constant):
         return node.value
     elif isinstance(node, ast.List):
         items = [_ast_value_to_python(elt) for elt in node.elts]
         if any(isinstance(item, _DynamicValue) for item in items):
-            return DYNAMIC
+            return _DYNAMIC
         return items
     elif isinstance(node, ast.Dict):
         keys = []
         values = []
         for k, v in zip(node.keys, node.values):
             if k is None:  # **kwargs spread
-                return DYNAMIC
+                return _DYNAMIC
             key_val = _ast_value_to_python(k)
             val_val = _ast_value_to_python(v)
             if isinstance(key_val, _DynamicValue) or isinstance(val_val, _DynamicValue):
-                return DYNAMIC
+                return _DYNAMIC
             keys.append(key_val)
             values.append(val_val)
         return dict(zip(keys, values))
     elif isinstance(node, ast.Tuple):
         items = [_ast_value_to_python(elt) for elt in node.elts]
         if any(isinstance(item, _DynamicValue) for item in items):
-            return DYNAMIC
+            return _DYNAMIC
         return tuple(items)
     elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         # Handle negative numbers like -1
         operand = _ast_value_to_python(node.operand)
         if isinstance(operand, _DynamicValue):
-            return DYNAMIC
+            return _DYNAMIC
         return -operand
     else:
         # Variable reference, function call, etc. - can't determine statically
-        return DYNAMIC
-
-    return DYNAMIC
-
-
-class _DynamicValue:
-    """Sentinel for values that can't be determined statically."""
-
-    pass
+        return _DYNAMIC
 
 
 def validate_code_tool_calls(

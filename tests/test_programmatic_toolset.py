@@ -490,7 +490,7 @@ print(f"result: {result}")
         assert 'result: 8' in result
 
     async def test_pydantic_validation_extra_fields_rejected(self):
-        """Test that extra/unknown parameters are rejected."""
+        """Test that extra/unknown parameters are rejected BEFORE execution."""
         base_toolset = FunctionToolset[None]()
 
         @base_toolset.tool
@@ -504,17 +504,17 @@ print(f"result: {result}")
         tools = await programmatic.get_tools(ctx)
         tool = tools['run_python_code']
 
-        # Test that extra parameters cause validation error
+        # Test that extra parameters cause pre-execution validation error
         code = """
-try:
-    # Pass an extra parameter that doesn't exist
-    result = simple_tool(name="World", unknown_param="bad")
-    print(f"Unexpected success: {result}")
-except TypeError as e:
-    print(f"Caught validation error: {e}")
+# Pass an extra parameter that doesn't exist
+result = simple_tool(name="World", unknown_param="bad")
+print(f"result: {result}")
 """
         result = await programmatic.call_tool('run_python_code', {'code': code}, ctx, tool)
-        assert 'Caught validation error' in result
+        # Pre-execution validation catches extra fields
+        assert 'Code validation failed before execution' in result
+        assert 'simple_tool()' in result
+        assert 'Extra inputs are not permitted' in result
 
 
 class TestProgrammaticToolsetWithToolManager:
