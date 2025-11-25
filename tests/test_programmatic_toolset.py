@@ -74,8 +74,8 @@ class TestToolFunctionGeneration:
             },
         )
 
-        code = _generate_tool_function('add', tool_def)
-        assert 'def add(a: int, b: int):' in code
+        code, models = _generate_tool_function('add', tool_def)
+        assert 'def add(a: int, b: int) -> Any:' in code
         assert '"""Add two numbers"""' in code
         assert "__call_tool__('add'" in code
 
@@ -95,9 +95,45 @@ class TestToolFunctionGeneration:
             },
         )
 
-        code = _generate_tool_function('search', tool_def)
+        code, models = _generate_tool_function('search', tool_def)
         assert 'query: str' in code
         assert 'limit: int = 10' in code
+
+
+    def test_return_type_generation(self):
+        """Test that return types are included in generated functions."""
+        from pydantic_ai.tools import ToolDefinition
+
+        tool_def = ToolDefinition(
+            name='get_user',
+            description='Get user by ID',
+            parameters_json_schema={
+                'type': 'object',
+                'properties': {
+                    'user_id': {'type': 'integer'},
+                },
+                'required': ['user_id'],
+            },
+            return_json_schema={
+                'type': 'object',
+                'properties': {
+                    'id': {'type': 'integer'},
+                    'name': {'type': 'string'},
+                    'email': {'type': 'string'},
+                },
+                'required': ['id', 'name'],
+            },
+        )
+
+        code, models = _generate_tool_function('get_user', tool_def)
+        # Should have return type annotation
+        assert '-> __get_user_Result' in code
+        # Should generate a model for the return type
+        assert len(models) == 1
+        assert 'class __get_user_Result(BaseModel):' in models[0]
+        assert 'id: int' in models[0]
+        assert 'name: str' in models[0]
+        assert 'email: str | None = None' in models[0]  # not required
 
 
 class TestCodeSandbox:

@@ -38,6 +38,8 @@ class FunctionSchema:
     description: str | None
     validator: SchemaValidator
     json_schema: ObjectJsonSchema
+    return_json_schema: ObjectJsonSchema | None = None
+    """JSON schema for the function's return type, if available."""
     # if not None, the function takes a single by that name (besides potentially `info`)
     takes_ctx: bool
     is_async: bool
@@ -212,10 +214,23 @@ def function_schema(  # noqa: C901
         # and set it on the tool
         description = json_schema.pop('description', None)
 
+    # Generate return type schema if available
+    return_json_schema: dict[str, Any] | None = None
+    return_type = type_hints.get('return')
+    if return_type is not None and return_type is not type(None):
+        try:
+            return_schema = gen_schema.generate_schema(return_type)
+            return_schema = gen_schema.clean_schema(return_schema)
+            return_json_schema = schema_generator().generate(return_schema)
+        except Exception:
+            # If we can't generate a schema for the return type, just skip it
+            pass
+
     return FunctionSchema(
         description=description,
         validator=schema_validator,
         json_schema=check_object_json_schema(json_schema),
+        return_json_schema=return_json_schema,
         single_arg_name=single_arg_name,
         positional_fields=positional_fields,
         var_positional_field=var_positional_field,

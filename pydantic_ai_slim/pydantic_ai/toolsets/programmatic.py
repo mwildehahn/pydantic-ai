@@ -252,15 +252,106 @@ def _json_schema_to_pydantic_field(param_name: str, param_schema: dict[str, Any]
             return f'{param_name}: {py_type} = {default!r}'
 
 
-def _generate_tool_function(name: str, tool_def: ToolDefinition) -> str:
-    """Generate a Python function definition for a tool with Pydantic validation."""
+def _json_schema_to_python_type(schema: dict[str, Any] | None, model_prefix: str = '') -> tuple[str, list[str]]:
+    """Convert a JSON schema to a Python type hint and any needed model definitions.
+
+    Args:
+        schema: The JSON schema to convert.
+        model_prefix: Prefix for generated model names.
+
+    Returns:
+        Tuple of (type_hint_string, list_of_model_definitions)
+    """
+    if schema is None:
+        return 'Any', []
+
+    models: list[str] = []
+    json_type = schema.get('type')
+
+    # Handle $ref - for now just use dict
+    if '$ref' in schema:
+        return 'dict', []
+
+    # Handle anyOf/oneOf (union types)
+    if 'anyOf' in schema or 'oneOf' in schema:
+        variants = schema.get('anyOf') or schema.get('oneOf', [])
+        types = []
+        for variant in variants:
+            t, m = _json_schema_to_python_type(variant, model_prefix)
+            types.append(t)
+            models.extend(m)
+        return ' | '.join(types), models
+
+    # Handle arrays
+    if json_type == 'array':
+        items_schema = schema.get('items', {})
+        item_type, item_models = _json_schema_to_python_type(items_schema, model_prefix)
+        models.extend(item_models)
+        return f'list[{item_type}]', models
+
+    # Handle objects with properties - generate a model
+    if json_type == 'object' and 'properties' in schema:
+        properties = schema.get('properties', {})
+        required = set(schema.get('required', []))
+
+        if not properties:
+            return 'dict', []
+
+        # Generate a unique model name
+        model_name = f'{model_prefix}Result' if model_prefix else 'Result'
+
+        field_defs = []
+        for prop_name, prop_schema in properties.items():
+            prop_type, prop_models = _json_schema_to_python_type(prop_schema, f'{model_name}_{prop_name}')
+            models.extend(prop_models)
+
+            if prop_name in required:
+                field_defs.append(f'    {prop_name}: {prop_type}')
+            else:
+                field_defs.append(f'    {prop_name}: {prop_type} | None = None')
+
+        model_def = f'''class {model_name}(BaseModel):
+    model_config = ConfigDict(extra='allow')
+{chr(10).join(field_defs) if field_defs else '    pass'}
+'''
+        models.append(model_def)
+        return model_name, models
+
+    # Simple types
+    type_map = {
+        'string': 'str',
+        'integer': 'int',
+        'number': 'float',
+        'boolean': 'bool',
+        'array': 'list',
+        'object': 'dict',
+        'null': 'None',
+    }
+
+    if isinstance(json_type, list):
+        types = [type_map.get(t, 'Any') for t in json_type if t != 'null']
+        if 'null' in json_type:
+            types.append('None')
+        return ' | '.join(types) if types else 'Any', []
+
+    return type_map.get(json_type, 'Any') if json_type else 'Any', []
+
+
+def _generate_tool_function(name: str, tool_def: ToolDefinition) -> tuple[str, list[str]]:
+    """Generate a Python function definition for a tool with Pydantic validation.
+
+    Returns:
+        Tuple of (function_code, list_of_model_definitions)
+    """
     # Extract parameters from JSON schema
     schema = tool_def.parameters_json_schema
     properties = schema.get('properties', {})
     required = set(schema.get('required', []))
 
-    # Generate Pydantic model for validation
-    model_name = f'__{name}_Args__'
+    models: list[str] = []
+
+    # Generate Pydantic model for argument validation
+    args_model_name = f'__{name}_Args__'
     model_fields = []
     for param_name, param_schema in properties.items():
         is_required = param_name in required
@@ -286,6 +377,14 @@ def _generate_tool_function(name: str, tool_def: ToolDefinition) -> str:
 
     params_str = ', '.join(params)
 
+    # Generate return type from return_json_schema
+    return_type = 'Any'
+    if tool_def.return_json_schema:
+        return_type, return_models = _json_schema_to_python_type(
+            tool_def.return_json_schema, f'__{name}_'
+        )
+        models.extend(return_models)
+
     # Build docstring
     description = tool_def.description or f'Call the {name} tool.'
     # Escape triple quotes in description
@@ -296,24 +395,25 @@ def _generate_tool_function(name: str, tool_def: ToolDefinition) -> str:
     args_items = [f"'{p}': {p}" for p in properties.keys()]
     args_dict = '{' + ', '.join(args_items) + '}'
 
-    return f"""
-class {model_name}(BaseModel):
+    func_code = f"""
+class {args_model_name}(BaseModel):
     model_config = ConfigDict(extra='forbid')
 {model_fields_str}
 
-def {name}({params_str}):
+def {name}({params_str}) -> {return_type}:
     {docstring}
     args = {args_dict}
     # Filter out None values for optional parameters
     args = {{k: v for k, v in args.items() if v is not None}}
     # Validate arguments using Pydantic
     try:
-        validated = {model_name}(**args)
+        validated = {args_model_name}(**args)
         args = validated.model_dump(exclude_none=True)
     except ValidationError as e:
         raise TypeError(f"Invalid arguments for {name!r}: {{e}}")
     return __call_tool__({name!r}, args)
 """
+    return func_code, models
 
 
 def _json_type_to_python(json_type: str | list[str]) -> str:
@@ -340,7 +440,8 @@ def _json_type_to_python(json_type: str | list[str]) -> str:
 def _generate_sdk(tools: dict[str, ToolsetTool[Any]]) -> str:
     """Generate the complete SDK code for available tools with Pydantic validation."""
     lines = [
-        '# Auto-generated tool SDK with Pydantic validation',
+        '# Auto-generated tool SDK with Pydantic validation and return types',
+        'from typing import Any',
         'from pydantic import BaseModel, ConfigDict, ValidationError',
         '',
         '# Available tools:',
@@ -352,8 +453,22 @@ def _generate_sdk(tools: dict[str, ToolsetTool[Any]]) -> str:
 
     lines.append('')
 
+    # Collect all model definitions first (for return types)
+    all_models: list[str] = []
+    all_functions: list[str] = []
+
     for name, tool in tools.items():
-        lines.append(_generate_tool_function(name, tool.tool_def))
+        func_code, models = _generate_tool_function(name, tool.tool_def)
+        all_models.extend(models)
+        all_functions.append(func_code)
+
+    # Add return type models first (so they're defined before use)
+    for model in all_models:
+        lines.append(model)
+
+    # Then add functions
+    for func in all_functions:
+        lines.append(func)
 
     return '\n'.join(lines)
 

@@ -412,6 +412,7 @@ class Tool(Generic[ToolAgentDepsT]):
             name=self.name,
             description=self.description,
             parameters_json_schema=self.function_schema.json_schema,
+            return_json_schema=self.function_schema.return_json_schema,
             strict=self.strict,
             sequential=self.sequential,
             metadata=self.metadata,
@@ -459,6 +460,13 @@ class ToolDefinition:
 
     parameters_json_schema: ObjectJsonSchema = field(default_factory=lambda: {'type': 'object', 'properties': {}})
     """The JSON schema for the tool's parameters."""
+
+    return_json_schema: ObjectJsonSchema | None = None
+    """The JSON schema for the tool's return type.
+
+    This is used by programmatic toolsets to generate typed SDKs that enable
+    static type checking of code that uses tool return values.
+    """
 
     description: str | None = None
     """The description of the tool."""
