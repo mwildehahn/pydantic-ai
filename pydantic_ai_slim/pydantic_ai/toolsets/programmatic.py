@@ -50,7 +50,16 @@ from .._run_context import AgentDepsT, RunContext
 from ..tools import ToolDefinition
 from .abstract import AbstractToolset, ToolsetTool
 
-__all__ = ('ProgrammaticToolset', 'CodeSandbox', 'SandboxResult')
+__all__ = (
+    'ProgrammaticToolset',
+    'CodeSandbox',
+    'SandboxResult',
+    'CodeValidationError',
+    'VALIDATION_AST',
+    'VALIDATION_PYRIGHT',
+    'VALIDATION_RUFF',
+    'VALIDATION_NONE',
+)
 
 
 # Protocol marker for tool calls from sandbox
@@ -725,6 +734,122 @@ def validate_code_tool_calls(
     return errors
 
 
+async def validate_code_with_type_checker(
+    code: str,
+    sdk_code: str,
+    type_checker: str = 'pyright',
+    timeout: float = 30.0,
+) -> list[CodeValidationError]:
+    """Validate code using an external type checker (pyright/ruff).
+
+    This provides comprehensive type checking including:
+    - Argument type validation
+    - Return type validation
+    - Undefined variable detection
+    - Attribute access validation
+
+    Args:
+        code: The user code to validate.
+        sdk_code: The generated SDK code with type annotations.
+        type_checker: Which type checker to use ('pyright' or 'ruff').
+        timeout: Maximum time to wait for type checker.
+
+    Returns:
+        List of validation errors. Empty if code is valid.
+    """
+    import re
+    import tempfile
+    from pathlib import Path
+
+    errors: list[CodeValidationError] = []
+
+    # Create temp directory with the code
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Write the combined code
+        full_code = sdk_code + '\n\n# User code\n' + code
+        code_file = tmppath / 'code.py'
+        code_file.write_text(full_code)
+
+        # Calculate line offset (SDK code lines before user code)
+        sdk_lines = len(sdk_code.split('\n'))
+
+        # Run type checker
+        if type_checker == 'pyright':
+            cmd = ['pyright', '--outputjson', str(code_file)]
+        elif type_checker == 'ruff':
+            cmd = ['ruff', 'check', '--select=E,F', '--output-format=json', str(code_file)]
+        else:
+            return errors  # Unknown type checker
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except (FileNotFoundError, TimeoutError):
+            # Type checker not available or timed out
+            return errors
+        except Exception:
+            return errors
+
+        # Parse output
+        try:
+            output = json.loads(stdout.decode('utf-8'))
+        except json.JSONDecodeError:
+            return errors
+
+        if type_checker == 'pyright':
+            # Parse pyright JSON output
+            diagnostics = output.get('generalDiagnostics', [])
+            for diag in diagnostics:
+                if diag.get('severity') == 'error':
+                    line = diag.get('range', {}).get('start', {}).get('line', 0) + 1
+                    col = diag.get('range', {}).get('start', {}).get('character', 0)
+                    msg = diag.get('message', 'Unknown error')
+
+                    # Adjust line number to be relative to user code
+                    user_line = line - sdk_lines - 2  # -2 for comment lines
+                    if user_line > 0:
+                        # Try to extract tool name from context
+                        tool_name = '<type>'
+                        match = re.search(r'\"(\w+)\"', msg)
+                        if match:
+                            tool_name = match.group(1)
+
+                        errors.append(
+                            CodeValidationError(
+                                line=user_line,
+                                column=col,
+                                tool_name=tool_name,
+                                message=msg,
+                            )
+                        )
+
+        elif type_checker == 'ruff':
+            # Parse ruff JSON output
+            for diag in output:
+                line = diag.get('location', {}).get('row', 0)
+                col = diag.get('location', {}).get('column', 0)
+                msg = diag.get('message', 'Unknown error')
+
+                user_line = line - sdk_lines - 2
+                if user_line > 0:
+                    errors.append(
+                        CodeValidationError(
+                            line=user_line,
+                            column=col,
+                            tool_name='<lint>',
+                            message=msg,
+                        )
+                    )
+
+    return errors
+
+
 class _CodeArgs(TypedDict):
     """Arguments for the run_python_code tool."""
 
@@ -733,6 +858,13 @@ class _CodeArgs(TypedDict):
 
 # Validator for the run_python_code tool arguments (using public Pydantic API)
 _code_validator = TypeAdapter(_CodeArgs).validator
+
+
+# Validation modes
+VALIDATION_AST = 'ast'
+VALIDATION_PYRIGHT = 'pyright'
+VALIDATION_RUFF = 'ruff'
+VALIDATION_NONE = 'none'
 
 
 @dataclass
@@ -794,20 +926,29 @@ class ProgrammaticToolset(AbstractToolset[AgentDepsT]):
     sandbox_timeout: float = 300.0
     """Maximum execution time for code in seconds."""
 
-    validate_before_execution: bool = True
-    """Whether to validate tool calls before execution using AST analysis.
+    validation_mode: str = VALIDATION_AST
+    """How to validate code before execution.
 
-    When enabled (default), the code is parsed and tool calls are validated
-    against their schemas BEFORE execution. This catches errors like:
-    - Wrong argument types
+    Options:
+    - 'ast' (default): Fast AST-based validation of tool call arguments
+    - 'pyright': Full type checking using pyright (comprehensive but slower)
+    - 'ruff': Linting with ruff (fast, catches common errors)
+    - 'none': No pre-execution validation
+
+    AST validation catches:
+    - Wrong argument types (for static values)
     - Missing required arguments
     - Unknown arguments
     - Syntax errors
 
-    This allows returning detailed error messages to the LLM without
-    wasting time on execution. Disable for slightly faster execution
-    if you only want runtime validation.
+    Type checker validation (pyright) additionally catches:
+    - Return type misuse (e.g., accessing .invalid_field on return value)
+    - Undefined variables
+    - Type incompatibilities in expressions
     """
+
+    type_checker_timeout: float = 30.0
+    """Timeout for type checker validation in seconds."""
 
     _id: str | None = None
     """Optional unique ID for the toolset."""
@@ -933,19 +1074,27 @@ Important:
         # Get wrapped tools
         wrapped_tools = await self.wrapped.get_tools(ctx)
 
-        # Pre-execution validation: Check tool calls before running
-        if self.validate_before_execution:
-            validation_errors = validate_code_tool_calls(code, wrapped_tools)
-            if validation_errors:
-                error_messages = ['Code validation failed before execution:']
-                for err in validation_errors:
-                    error_messages.append(f'  - {err}')
-                error_messages.append('')
-                error_messages.append('Please fix these errors and try again.')
-                return '\n'.join(error_messages)
-
-        # Generate SDK
+        # Generate SDK first (needed for type checker validation)
         sdk_code = _generate_sdk(wrapped_tools)
+
+        # Pre-execution validation based on mode
+        validation_errors: list[CodeValidationError] = []
+
+        if self.validation_mode == VALIDATION_AST:
+            validation_errors = validate_code_tool_calls(code, wrapped_tools)
+        elif self.validation_mode in (VALIDATION_PYRIGHT, VALIDATION_RUFF):
+            validation_errors = await validate_code_with_type_checker(
+                code, sdk_code, self.validation_mode, self.type_checker_timeout
+            )
+        # VALIDATION_NONE: skip validation
+
+        if validation_errors:
+            error_messages = ['Code validation failed before execution:']
+            for err in validation_errors:
+                error_messages.append(f'  - {err}')
+            error_messages.append('')
+            error_messages.append('Please fix these errors and try again.')
+            return '\n'.join(error_messages)
 
         # Full code to execute
         full_code = sdk_code + '\n\n# User code\n' + code

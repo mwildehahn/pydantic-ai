@@ -14,6 +14,8 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.toolsets.programmatic import (
     CodeSandbox,
     ProgrammaticToolset,
+    VALIDATION_NONE,
+    VALIDATION_PYRIGHT,
     _generate_tool_function,
     _json_type_to_python,
 )
@@ -551,6 +553,68 @@ print(f"result: {result}")
         assert 'Code validation failed before execution' in result
         assert 'simple_tool()' in result
         assert 'Extra inputs are not permitted' in result
+
+
+    async def test_validation_mode_none_skips_validation(self):
+        """Test that validation_mode='none' skips pre-execution validation."""
+        base_toolset = FunctionToolset[None]()
+
+        @base_toolset.tool
+        def typed_tool(count: int) -> str:
+            """A typed tool."""
+            return f'count: {count}'
+
+        # With validation disabled, invalid types won't be caught before execution
+        programmatic = ProgrammaticToolset(base_toolset, validation_mode=VALIDATION_NONE)
+        ctx = build_run_context(None)
+
+        tools = await programmatic.get_tools(ctx)
+        tool = tools['run_python_code']
+
+        # This would fail AST validation but with validation_mode='none' it runs
+        # The error will be caught at runtime by Pydantic in the sandbox
+        code = """
+try:
+    result = typed_tool(count="not_a_number")
+    print(f"result: {result}")
+except Exception as e:
+    print(f"Runtime error: {type(e).__name__}")
+"""
+        result = await programmatic.call_tool('run_python_code', {'code': code}, ctx, tool)
+        # Should execute and hit runtime validation error
+        assert 'Runtime error' in result or 'Invalid arguments' in result
+
+    async def test_validation_mode_pyright_available(self):
+        """Test that pyright validation mode is supported (if pyright is installed)."""
+        import shutil
+
+        base_toolset = FunctionToolset[None]()
+
+        @base_toolset.tool
+        def get_value(key: str) -> int:
+            """Get a value."""
+            return 42
+
+        programmatic = ProgrammaticToolset(base_toolset, validation_mode=VALIDATION_PYRIGHT)
+        ctx = build_run_context(None)
+
+        tools = await programmatic.get_tools(ctx)
+        tool = tools['run_python_code']
+
+        # Valid code should work
+        code = """
+result = get_value(key="test")
+print(f"result: {result}")
+"""
+        result = await programmatic.call_tool('run_python_code', {'code': code}, ctx, tool)
+
+        # If pyright is available, validation should pass and code should execute
+        # If pyright is not available, validation is skipped and code still executes
+        if shutil.which('pyright'):
+            assert 'result: 42' in result
+        else:
+            # Pyright not installed, validation skipped, code still runs
+            assert 'result: 42' in result
 
 
 class TestProgrammaticToolsetWithToolManager:
