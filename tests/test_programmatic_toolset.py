@@ -429,7 +429,7 @@ print(result)
         assert result == '(no output)'
 
     async def test_pydantic_validation_catches_type_errors(self):
-        """Test that Pydantic validation catches type errors before tool execution."""
+        """Test that Pydantic validation catches type errors BEFORE execution."""
         base_toolset = FunctionToolset[None]()
         tool_was_called = False
 
@@ -451,18 +451,17 @@ print(result)
         tools = await programmatic.get_tools(ctx)
         tool = tools['run_python_code']
 
-        # Test that wrong types are caught by Pydantic
+        # Test that wrong types are caught by pre-execution validation
         code = """
-try:
-    # Pass a string where int is expected - Pydantic should catch this
-    result = typed_tool(count="not_a_number", name="test")
-    print(f"Unexpected success: {result}")
-except TypeError as e:
-    print(f"Caught validation error: {e}")
+# Pass a string where int is expected - should be caught before execution
+result = typed_tool(count="not_a_number", name="test")
+print(f"result: {result}")
 """
         result = await programmatic.call_tool('run_python_code', {'code': code}, ctx, tool)
-        assert 'Caught validation error' in result
-        assert 'Invalid arguments' in result
+        # Pre-execution validation catches errors BEFORE running the code
+        assert 'Code validation failed before execution' in result
+        assert 'typed_tool()' in result
+        assert 'Input should be a valid integer' in result
         # Tool should not have been called due to validation failure
         assert not tool_was_called
 

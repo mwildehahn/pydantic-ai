@@ -35,14 +35,15 @@ Example:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import sys
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
 from .._run_context import AgentDepsT, RunContext
@@ -357,6 +358,264 @@ def _generate_sdk(tools: dict[str, ToolsetTool[Any]]) -> str:
     return '\n'.join(lines)
 
 
+@dataclass
+class CodeValidationError:
+    """Error from pre-execution code validation."""
+
+    line: int
+    """Line number in the code (1-indexed)."""
+
+    column: int
+    """Column number in the code (0-indexed)."""
+
+    tool_name: str
+    """Name of the tool that has invalid arguments."""
+
+    message: str
+    """Description of the validation error."""
+
+    def __str__(self) -> str:
+        return f'Line {self.line}, col {self.column}: {self.tool_name}() - {self.message}'
+
+
+def _json_type_to_pydantic_type(json_type: str | list[str]) -> type:
+    """Convert JSON schema type to Python type for Pydantic model creation."""
+    if isinstance(json_type, list):
+        # For union types, use the first non-null type or Any
+        for t in json_type:
+            if t != 'null':
+                return _json_type_to_pydantic_type(t)
+        return type(None)
+
+    type_map: dict[str, type] = {
+        'string': str,
+        'integer': int,
+        'number': float,
+        'boolean': bool,
+        'array': list,
+        'object': dict,
+        'null': type(None),
+    }
+    return type_map.get(json_type, object)
+
+
+def _create_validator_model(tool_name: str, tool_def: ToolDefinition) -> type[BaseModel]:
+    """Create a Pydantic model for validating tool arguments."""
+    schema = tool_def.parameters_json_schema
+    properties = schema.get('properties', {})
+    required = set(schema.get('required', []))
+
+    # Build field definitions for create_model
+    field_definitions: dict[str, Any] = {}
+    for param_name, param_schema in properties.items():
+        param_type = _json_type_to_pydantic_type(param_schema.get('type', 'object'))
+        if param_name in required:
+            field_definitions[param_name] = (param_type, ...)
+        else:
+            default = param_schema.get('default')
+            field_definitions[param_name] = (param_type | None, default)
+
+    # Create model with extra='forbid' to catch unknown arguments
+    return create_model(
+        f'__{tool_name}_Validator__',
+        __config__=ConfigDict(extra='forbid'),
+        **field_definitions,
+    )
+
+
+def _ast_value_to_python(node: ast.expr) -> Any:
+    """Try to convert an AST node to a Python value for validation.
+
+    Returns the value if it can be statically determined, otherwise returns a
+    sentinel object indicating the value is dynamic.
+    """
+
+    class _DynamicValue:
+        """Sentinel for values that can't be determined statically."""
+
+        pass
+
+    DYNAMIC = _DynamicValue()
+
+    if isinstance(node, ast.Constant):
+        return node.value
+    elif isinstance(node, ast.List):
+        items = [_ast_value_to_python(elt) for elt in node.elts]
+        if any(isinstance(item, _DynamicValue) for item in items):
+            return DYNAMIC
+        return items
+    elif isinstance(node, ast.Dict):
+        keys = []
+        values = []
+        for k, v in zip(node.keys, node.values):
+            if k is None:  # **kwargs spread
+                return DYNAMIC
+            key_val = _ast_value_to_python(k)
+            val_val = _ast_value_to_python(v)
+            if isinstance(key_val, _DynamicValue) or isinstance(val_val, _DynamicValue):
+                return DYNAMIC
+            keys.append(key_val)
+            values.append(val_val)
+        return dict(zip(keys, values))
+    elif isinstance(node, ast.Tuple):
+        items = [_ast_value_to_python(elt) for elt in node.elts]
+        if any(isinstance(item, _DynamicValue) for item in items):
+            return DYNAMIC
+        return tuple(items)
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        # Handle negative numbers like -1
+        operand = _ast_value_to_python(node.operand)
+        if isinstance(operand, _DynamicValue):
+            return DYNAMIC
+        return -operand
+    else:
+        # Variable reference, function call, etc. - can't determine statically
+        return DYNAMIC
+
+    return DYNAMIC
+
+
+class _DynamicValue:
+    """Sentinel for values that can't be determined statically."""
+
+    pass
+
+
+def validate_code_tool_calls(
+    code: str,
+    tools: dict[str, ToolsetTool[Any]],
+) -> list[CodeValidationError]:
+    """Validate tool calls in code before execution.
+
+    Parses the code using AST and validates any calls to known tools
+    against their schemas. Returns a list of validation errors.
+
+    This allows catching type errors, missing arguments, and unknown
+    arguments BEFORE running the code.
+
+    Args:
+        code: The Python code to validate.
+        tools: Dictionary of available tools.
+
+    Returns:
+        List of validation errors. Empty list if code is valid.
+    """
+    errors: list[CodeValidationError] = []
+
+    # Parse the code
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return [
+            CodeValidationError(
+                line=e.lineno or 1,
+                column=e.offset or 0,
+                tool_name='<syntax>',
+                message=f'Syntax error: {e.msg}',
+            )
+        ]
+
+    # Build validators for each tool
+    validators: dict[str, type[BaseModel]] = {}
+    for name, tool in tools.items():
+        validators[name] = _create_validator_model(name, tool.tool_def)
+
+    # Walk the AST looking for function calls
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            # Check if this is a call to one of our tools
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                # Handle method calls like obj.method() - skip these
+                continue
+
+            if func_name not in validators:
+                # Not a tool call, skip
+                continue
+
+            validator = validators[func_name]
+            tool = tools[func_name]
+            schema = tool.tool_def.parameters_json_schema
+            properties = schema.get('properties', {})
+            required = set(schema.get('required', []))
+            param_names = list(properties.keys())
+
+            # Build arguments dict from the call
+            args_dict: dict[str, Any] = {}
+            has_dynamic_args = False
+
+            # Handle positional arguments
+            for i, arg in enumerate(node.args):
+                if i < len(param_names):
+                    value = _ast_value_to_python(arg)
+                    if isinstance(value, _DynamicValue):
+                        has_dynamic_args = True
+                    else:
+                        args_dict[param_names[i]] = value
+                else:
+                    # Too many positional arguments
+                    errors.append(
+                        CodeValidationError(
+                            line=node.lineno,
+                            column=node.col_offset,
+                            tool_name=func_name,
+                            message=f'Too many positional arguments. Expected at most {len(param_names)}, got {len(node.args)}',
+                        )
+                    )
+                    break
+
+            # Handle keyword arguments
+            for kw in node.keywords:
+                if kw.arg is None:
+                    # **kwargs - can't validate statically
+                    has_dynamic_args = True
+                    continue
+
+                value = _ast_value_to_python(kw.value)
+                if isinstance(value, _DynamicValue):
+                    has_dynamic_args = True
+                else:
+                    if kw.arg in args_dict:
+                        errors.append(
+                            CodeValidationError(
+                                line=node.lineno,
+                                column=node.col_offset,
+                                tool_name=func_name,
+                                message=f"Duplicate argument: '{kw.arg}'",
+                            )
+                        )
+                    args_dict[kw.arg] = value
+
+            # Skip validation if we have dynamic arguments we can't check
+            if has_dynamic_args:
+                # Still check for required arguments that we DO have
+                for req_arg in required:
+                    if req_arg not in args_dict:
+                        # Can't tell if it's provided dynamically, skip
+                        pass
+                continue
+
+            # Validate using Pydantic
+            try:
+                validator(**args_dict)
+            except ValidationError as e:
+                for error in e.errors():
+                    loc = '.'.join(str(x) for x in error['loc'])
+                    msg = error['msg']
+                    errors.append(
+                        CodeValidationError(
+                            line=node.lineno,
+                            column=node.col_offset,
+                            tool_name=func_name,
+                            message=f"Invalid argument '{loc}': {msg}",
+                        )
+                    )
+
+    return errors
+
+
 class _CodeArgs(TypedDict):
     """Arguments for the run_python_code tool."""
 
@@ -425,6 +684,21 @@ class ProgrammaticToolset(AbstractToolset[AgentDepsT]):
 
     sandbox_timeout: float = 300.0
     """Maximum execution time for code in seconds."""
+
+    validate_before_execution: bool = True
+    """Whether to validate tool calls before execution using AST analysis.
+
+    When enabled (default), the code is parsed and tool calls are validated
+    against their schemas BEFORE execution. This catches errors like:
+    - Wrong argument types
+    - Missing required arguments
+    - Unknown arguments
+    - Syntax errors
+
+    This allows returning detailed error messages to the LLM without
+    wasting time on execution. Disable for slightly faster execution
+    if you only want runtime validation.
+    """
 
     _id: str | None = None
     """Optional unique ID for the toolset."""
@@ -549,6 +823,17 @@ Important:
 
         # Get wrapped tools
         wrapped_tools = await self.wrapped.get_tools(ctx)
+
+        # Pre-execution validation: Check tool calls before running
+        if self.validate_before_execution:
+            validation_errors = validate_code_tool_calls(code, wrapped_tools)
+            if validation_errors:
+                error_messages = ['Code validation failed before execution:']
+                for err in validation_errors:
+                    error_messages.append(f'  - {err}')
+                error_messages.append('')
+                error_messages.append('Please fix these errors and try again.')
+                return '\n'.join(error_messages)
 
         # Generate SDK
         sdk_code = _generate_sdk(wrapped_tools)
