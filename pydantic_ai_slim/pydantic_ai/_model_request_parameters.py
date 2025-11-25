@@ -2,15 +2,13 @@ from __future__ import annotations as _annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from . import _utils
 from .builtin_tools import AbstractBuiltinTool
 
 if TYPE_CHECKING:
     from .tools import ToolDefinition
-else:  # pragma: no cover
-    ToolDefinition = Any
 
 if TYPE_CHECKING:
     from ._output import OutputObjectDefinition

@@ -30,6 +30,10 @@ if TYPE_CHECKING:
     ModelRequestParametersField = ModelRequestParameters | None
     ModelSettingsField = ModelSettings | None
 else:  # pragma: no cover
+    # Even though we don't serialize these, if we don't do this, the TypeAdapter
+    # will try to inspect all the fields, leading to issues with httpx types
+    # being included in the models. Setting these to Any prevents this while
+    # still giving us type safety within TYPE_CHECKING.
     ModelRequestParametersField = Any
     ModelSettingsField = Any
 
@@ -1008,7 +1012,7 @@ class ModelRequest:
     instructions: str | None = None
     """The instructions for the model."""
 
-    model_request_parameters: Annotated[ModelRequestParametersField, pydantic.Field(exclude=True, repr=False)] = field(
+    model_request_parameters: Annotated[ModelRequestParametersField, pydantic.Field(exclude=True)] = field(
         default=None, repr=False, compare=False
     )
     """Full request parameters captured for this request.
