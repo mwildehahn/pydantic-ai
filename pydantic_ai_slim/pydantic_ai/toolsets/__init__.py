@@ -7,6 +7,7 @@ from .filtered import FilteredToolset
 from .function import FunctionToolset
 from .prefixed import PrefixedToolset
 from .prepared import PreparedToolset
+from .programmatic import ProgrammaticToolset
 from .renamed import RenamedToolset
 from .wrapper import WrapperToolset
 
@@ -20,6 +21,7 @@ __all__ = (
     'FilteredToolset',
     'FunctionToolset',
     'PrefixedToolset',
+    'ProgrammaticToolset',
     'RenamedToolset',
     'PreparedToolset',
     'WrapperToolset',
