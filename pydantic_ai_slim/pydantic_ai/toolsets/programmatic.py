@@ -42,7 +42,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic_core import SchemaValidator, core_schema
+from pydantic import TypeAdapter
+from typing_extensions import TypedDict
 
 from .._run_context import AgentDepsT, RunContext
 from ..tools import ToolDefinition
@@ -356,14 +357,14 @@ def _generate_sdk(tools: dict[str, ToolsetTool[Any]]) -> str:
     return '\n'.join(lines)
 
 
-# Validator for the run_python_code tool arguments
-_code_validator = SchemaValidator(
-    core_schema.typed_dict_schema(
-        {
-            'code': core_schema.typed_dict_field(core_schema.str_schema()),
-        }
-    )
-)
+class _CodeArgs(TypedDict):
+    """Arguments for the run_python_code tool."""
+
+    code: str
+
+
+# Validator for the run_python_code tool arguments (using public Pydantic API)
+_code_validator = TypeAdapter(_CodeArgs).validator
 
 
 @dataclass
