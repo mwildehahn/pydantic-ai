@@ -368,6 +368,14 @@ class InstrumentedModel(WrapperModel):
             model_settings,
             model_request_parameters,
         )
+
+        # Record metadata on the ModelRequest (the last request in the message history)
+        for message in reversed(messages):
+            if isinstance(message, ModelRequest):
+                message.model_request_parameters = prepared_parameters
+                message.model_settings = prepared_settings
+                break
+
         with self._instrument(messages, prepared_settings, prepared_parameters) as finish:
             response = await self.wrapped.request(messages, model_settings, model_request_parameters)
             finish(response, prepared_parameters)
@@ -385,6 +393,14 @@ class InstrumentedModel(WrapperModel):
             model_settings,
             model_request_parameters,
         )
+
+        # Record metadata on the ModelRequest (the last request in the message history)
+        for message in reversed(messages):
+            if isinstance(message, ModelRequest):
+                message.model_request_parameters = prepared_parameters
+                message.model_settings = prepared_settings
+                break
+
         with self._instrument(messages, prepared_settings, prepared_parameters) as finish:
             response_stream: StreamedResponse | None = None
             try:
