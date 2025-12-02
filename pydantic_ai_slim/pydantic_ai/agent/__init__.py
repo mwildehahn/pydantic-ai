@@ -1144,6 +1144,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         requires_approval: bool = False,
         metadata: dict[str, Any] | None = None,
         defer_loading: bool = False,
+        input_examples: list[dict[str, Any]] | None = None,
     ) -> Callable[[ToolFuncPlain[ToolParams]], ToolFuncPlain[ToolParams]]: ...
 
     def tool_plain(
@@ -1163,6 +1164,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         requires_approval: bool = False,
         metadata: dict[str, Any] | None = None,
         defer_loading: bool = False,
+        input_examples: list[dict[str, Any]] | None = None,
     ) -> Any:
         """Decorator to register a tool function which DOES NOT take `RunContext` as an argument.
 
@@ -1214,6 +1216,8 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             metadata: Optional metadata for the tool. This is not sent to the model but can be used for filtering and tool behavior customization.
             defer_loading: Whether to defer loading this tool until discovered via tool search. Defaults to False.
                 See [`ToolDefinition.defer_loading`][pydantic_ai.tools.ToolDefinition.defer_loading] for more info.
+            input_examples: Example inputs demonstrating correct tool usage. Defaults to None.
+                See [`ToolDefinition.input_examples`][pydantic_ai.tools.ToolDefinition.input_examples] for more info.
         """
 
         def tool_decorator(func_: ToolFuncPlain[ToolParams]) -> ToolFuncPlain[ToolParams]:
@@ -1233,6 +1237,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
                 requires_approval=requires_approval,
                 metadata=metadata,
                 defer_loading=defer_loading,
+                input_examples=input_examples,
             )
             return func_
 

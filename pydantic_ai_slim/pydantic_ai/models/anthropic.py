@@ -114,10 +114,9 @@ try:
         BetaToolChoiceParam,
         BetaToolParam,
         BetaToolResultBlockParam,
-        BetaToolUnionParam,
         BetaToolSearchToolBm25_20251119Param,
         BetaToolSearchToolRegex20251119Param,
-        BetaToolSearchToolResultBlock,
+        BetaToolUnionParam,
         BetaToolUseBlock,
         BetaToolUseBlockParam,
         BetaWebFetchTool20250910Param,
@@ -450,6 +449,11 @@ class AnthropicModel(Model):
         if has_strict_tools or model_request_parameters.output_mode == 'native':
             betas.add('structured-outputs-2025-11-13')
 
+        # Check if any tools use input_examples (advanced tool use feature)
+        has_input_examples = any(tool.get('input_examples') for tool in tools)
+        if has_input_examples:
+            betas.add('advanced-tool-use-2025-11-20')
+
         if beta_header := extra_headers.pop('anthropic-beta', None):
             betas.update({stripped_beta for beta in beta_header.split(',') if (stripped_beta := beta.strip())})
 
@@ -610,9 +614,7 @@ class AnthropicModel(Model):
         mcp_servers: list[BetaRequestMCPServerURLDefinitionParam] = []
 
         # Check if any tools use defer_loading and auto-add ToolSearchTool if needed
-        has_defer_loading = any(
-            tool_def.defer_loading for tool_def in model_request_parameters.tool_defs.values()
-        )
+        has_defer_loading = any(tool_def.defer_loading for tool_def in model_request_parameters.tool_defs.values())
         has_tool_search = any(isinstance(tool, ToolSearchTool) for tool in model_request_parameters.builtin_tools)
         if has_defer_loading and not has_tool_search:
             # Auto-add ToolSearchTool with default (regex) when defer_loading is used
@@ -1130,6 +1132,8 @@ class AnthropicModel(Model):
             tool_param['strict'] = f.strict
         if f.defer_loading:
             tool_param['defer_loading'] = True
+        if f.input_examples:
+            tool_param['input_examples'] = f.input_examples
         return tool_param
 
     @staticmethod
