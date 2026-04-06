@@ -1208,11 +1208,13 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             return merged
 
         # Build toolset with per-run capability contributions
+        all_builtin_tools = [*cap_builtin_tools, *(builtin_tools or [])]
         toolset = self._get_toolset(
             output_toolset=output_toolset,
             additional_toolsets=toolsets,
             cap_toolsets=cap_toolsets,
             run_capability=run_capability,
+            builtin_tools=all_builtin_tools,
         )
         toolset = await toolset.for_run(initial_ctx)
         tool_manager = ToolManager[AgentDepsT](
@@ -1255,7 +1257,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             output_validators=output_validators,
             validation_context=self._validation_context,
             root_capability=run_capability,
-            builtin_tools=[*cap_builtin_tools, *(builtin_tools or [])],
+            builtin_tools=all_builtin_tools,
             tool_manager=tool_manager,
             tracer=tracer,
             get_instructions=get_instructions,
@@ -2356,6 +2358,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         additional_toolsets: Sequence[AbstractToolset[AgentDepsT]] | None = None,
         cap_toolsets: Sequence[AgentToolset[AgentDepsT]] | None = None,
         run_capability: AbstractCapability[AgentDepsT] | None = None,
+        builtin_tools: Sequence[AgentBuiltinTool[AgentDepsT]] | None = None,
     ) -> AbstractToolset[AgentDepsT]:
         """Get the complete toolset.
 
@@ -2364,6 +2367,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             additional_toolsets: Additional toolsets to add, unless toolsets have been overridden.
             cap_toolsets: Per-run capability toolsets to use instead of the init-time capability toolsets.
             run_capability: The per-run capability instance, used to apply wrapper toolsets.
+            builtin_tools: The builtin tools for this run, used to detect native tool search.
         """
         toolsets = list(self._build_toolset_list(cap_toolsets=cap_toolsets))
         # Don't add additional toolsets if the toolsets have been overridden
@@ -2381,9 +2385,16 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             if wrapper is not None:
                 toolset = wrapper
 
+        # Check if native tool search is enabled via builtin tools
+        from ..builtin_tools import ToolSearchTool
+
+        native_tool_search = any(isinstance(t, ToolSearchTool) for t in (builtin_tools or []))
+
         # Always wraps; short-circuits when no deferred tools.
         # Wraps outside PreparedToolset and capability wrappers so search_tools is always available.
-        toolset = ToolSearchToolset(wrapped=toolset)
+        # When native_tool_search is True, deferred tools pass through with defer_loading=True
+        # instead of being hidden behind the synthetic search_tools tool.
+        toolset = ToolSearchToolset(wrapped=toolset, native_tool_search=native_tool_search)
 
         output_toolset = output_toolset if _utils.is_set(output_toolset) else self._output_toolset
         if output_toolset is not None:
