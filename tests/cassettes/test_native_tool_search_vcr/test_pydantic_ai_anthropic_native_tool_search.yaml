@@ -1,0 +1,324 @@
+interactions:
+- request:
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, br, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '1606'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+    method: POST
+    parsed_body:
+      max_tokens: 4096
+      messages:
+      - content:
+        - text: What is the current exchange rate from USD to EUR?
+          type: text
+        role: user
+      model: claude-sonnet-4-5
+      stream: false
+      system:
+      - text: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools before
+          answering.
+        type: text
+      tool_choice:
+        type: auto
+      tools:
+      - description: Get the current weather for a city.
+        input_schema:
+          additionalProperties: false
+          properties:
+            city:
+              type: string
+          required:
+          - city
+          type: object
+        name: get_weather
+      - defer_loading: true
+        description: Look up the current exchange rate between two currencies.
+        input_schema:
+          additionalProperties: false
+          properties:
+            from_currency:
+              type: string
+            to_currency:
+              type: string
+          required:
+          - from_currency
+          - to_currency
+          type: object
+        name: get_exchange_rate
+      - defer_loading: true
+        description: Look up stock price by ticker symbol.
+        input_schema:
+          additionalProperties: false
+          properties:
+            symbol:
+              type: string
+          required:
+          - symbol
+          type: object
+        name: stock_lookup
+      - defer_loading: true
+        description: Calculate monthly mortgage payment for a home loan.
+        input_schema:
+          additionalProperties: false
+          properties:
+            principal:
+              type: number
+            rate:
+              type: number
+            years:
+              type: integer
+          required:
+          - principal
+          - rate
+          - years
+          type: object
+        name: mortgage_calculator
+      - name: tool_search_tool_bm25
+        type: tool_search_tool_bm25_20251119
+    uri: https://api.anthropic.com/v1/messages?beta=true
+  response:
+    headers:
+      connection:
+      - keep-alive
+      content-length:
+      - '1442'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      server-timing:
+      - x-originResponse;dur=6607
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+    parsed_body:
+      content:
+      - text: I'll search for a tool that can help with currency exchange rates.
+        type: text
+      - caller:
+          type: direct
+        id: srvtoolu_01Bd34TnRgLpj3Qd6g5gusjW
+        input:
+          query: currency exchange rate USD EUR conversion
+        name: tool_search_tool_bm25
+        type: server_tool_use
+      - content:
+          tool_references:
+          - tool_name: get_exchange_rate
+            type: tool_reference
+          - tool_name: mortgage_calculator
+            type: tool_reference
+          type: tool_search_tool_search_result
+        tool_use_id: srvtoolu_01Bd34TnRgLpj3Qd6g5gusjW
+        type: tool_search_tool_result
+      - text: Great! I found a tool to get exchange rates. Let me check the current exchange rate from USD to EUR for you.
+        type: text
+      - caller:
+          type: direct
+        id: toolu_01Jfm8RoM7RkryJ3GEimKZrj
+        input:
+          from_currency: USD
+          to_currency: EUR
+        name: get_exchange_rate
+        type: tool_use
+      id: msg_017sNsARoW7e4tDtrasHEDdV
+      model: claude-sonnet-4-5-20250929
+      role: assistant
+      stop_details: null
+      stop_reason: tool_use
+      stop_sequence: null
+      type: message
+      usage:
+        cache_creation:
+          ephemeral_1h_input_tokens: 0
+          ephemeral_5m_input_tokens: 0
+        cache_creation_input_tokens: 0
+        cache_read_input_tokens: 0
+        inference_geo: not_available
+        input_tokens: 1852
+        output_tokens: 181
+        server_tool_use:
+          web_fetch_requests: 0
+          web_search_requests: 0
+        service_tier: standard
+    status:
+      code: 200
+      message: OK
+- request:
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, br, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '2668'
+      content-type:
+      - application/json
+      cookie:
+      - _cfuvid=n7e0f4XHiwUxaMH9rp.0D8ARzvYRBym56395.CZFDJg-1775507059.4751415-1.0.1.1-K9cKDqJtW2ZlikteLrVHs7zWHX8dX2OiUK0OUjlWO9Y
+      host:
+      - api.anthropic.com
+    method: POST
+    parsed_body:
+      max_tokens: 4096
+      messages:
+      - content:
+        - text: What is the current exchange rate from USD to EUR?
+          type: text
+        role: user
+      - content:
+        - text: I'll search for a tool that can help with currency exchange rates.
+          type: text
+        - id: srvtoolu_01Bd34TnRgLpj3Qd6g5gusjW
+          input:
+            query: currency exchange rate USD EUR conversion
+          name: tool_search_tool_bm25
+          type: server_tool_use
+        - content:
+            tool_references:
+            - tool_name: get_exchange_rate
+              type: tool_reference
+            - tool_name: mortgage_calculator
+              type: tool_reference
+            type: tool_search_tool_search_result
+          tool_use_id: srvtoolu_01Bd34TnRgLpj3Qd6g5gusjW
+          type: tool_search_tool_result
+        - text: Great! I found a tool to get exchange rates. Let me check the current exchange rate from USD to EUR for you.
+          type: text
+        - id: toolu_01Jfm8RoM7RkryJ3GEimKZrj
+          input:
+            from_currency: USD
+            to_currency: EUR
+          name: get_exchange_rate
+          type: tool_use
+        role: assistant
+      - content:
+        - content:
+          - text: 1 USD = 0.92 EUR
+            type: text
+          is_error: false
+          tool_use_id: toolu_01Jfm8RoM7RkryJ3GEimKZrj
+          type: tool_result
+        role: user
+      model: claude-sonnet-4-5
+      stream: false
+      system:
+      - text: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools before
+          answering.
+        type: text
+      tool_choice:
+        type: auto
+      tools:
+      - description: Get the current weather for a city.
+        input_schema:
+          additionalProperties: false
+          properties:
+            city:
+              type: string
+          required:
+          - city
+          type: object
+        name: get_weather
+      - defer_loading: true
+        description: Look up the current exchange rate between two currencies.
+        input_schema:
+          additionalProperties: false
+          properties:
+            from_currency:
+              type: string
+            to_currency:
+              type: string
+          required:
+          - from_currency
+          - to_currency
+          type: object
+        name: get_exchange_rate
+      - defer_loading: true
+        description: Look up stock price by ticker symbol.
+        input_schema:
+          additionalProperties: false
+          properties:
+            symbol:
+              type: string
+          required:
+          - symbol
+          type: object
+        name: stock_lookup
+      - defer_loading: true
+        description: Calculate monthly mortgage payment for a home loan.
+        input_schema:
+          additionalProperties: false
+          properties:
+            principal:
+              type: number
+            rate:
+              type: number
+            years:
+              type: integer
+          required:
+          - principal
+          - rate
+          - years
+          type: object
+        name: mortgage_calculator
+      - name: tool_search_tool_bm25
+        type: tool_search_tool_bm25_20251119
+    uri: https://api.anthropic.com/v1/messages?beta=true
+  response:
+    headers:
+      connection:
+      - keep-alive
+      content-length:
+      - '613'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      server-timing:
+      - x-originResponse;dur=1993
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+    parsed_body:
+      content:
+      - text: "The current exchange rate is **1 USD = 0.92 EUR**. \n\nThis means that for every US dollar, you would get 0.92
+          euros."
+        type: text
+      id: msg_01W2vAAhc764ouydJQRRapoa
+      model: claude-sonnet-4-5-20250929
+      role: assistant
+      stop_details: null
+      stop_reason: end_turn
+      stop_sequence: null
+      type: message
+      usage:
+        cache_creation:
+          ephemeral_1h_input_tokens: 0
+          ephemeral_5m_input_tokens: 0
+        cache_creation_input_tokens: 0
+        cache_read_input_tokens: 0
+        inference_geo: not_available
+        input_tokens: 1188
+        output_tokens: 41
+        service_tier: standard
+    status:
+      code: 200
+      message: OK
+version: 1
