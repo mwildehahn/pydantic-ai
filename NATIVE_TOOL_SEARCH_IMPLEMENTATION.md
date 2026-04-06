@@ -96,8 +96,8 @@ Tool(defer_loading=True)
 - [x] 13. Streaming
 
 ### Cross-cutting
-- [ ] 14. Model profiles: `supports_native_tool_search` capability flag
-- [ ] 15. `ToolSearchToolset`: native mode pass-through
+- [x] 14. Model profiles: `supports_native_tool_search` capability flag (already handled — ToolSearchTool auto-included in SUPPORTED_BUILTIN_TOOLS, model classmethods updated)
+- [x] 15. `ToolSearchToolset`: native mode pass-through
 
 ---
 
