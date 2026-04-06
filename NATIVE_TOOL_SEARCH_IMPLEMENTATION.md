@@ -79,15 +79,15 @@ Tool(defer_loading=True)
 ## Tasks
 
 ### Anthropic
-- [ ] 1. Add `ToolSearchTool` builtin to `builtin_tools.py`
-- [ ] 2. Bump anthropic SDK to `>= 0.86.0` in `pyproject.toml`
-- [ ] 3. `_map_tool_definition`: pass `defer_loading` through to `BetaToolParam`
-- [ ] 4. `_add_builtin_tools`: handle `ToolSearchTool` → add tool_search_tool_bm25/regex
-- [ ] 5. `_map_server_tool_use_block`: handle `tool_search_tool_*` names
-- [ ] 6. `_process_response`: handle `ToolSearchToolResultBlock`
-- [ ] 7. Streaming: handle tool_search blocks in `_get_event_iterator`
-- [ ] 8. Message history replay: reconstruct tool_search blocks from `BuiltinToolCallPart`/`BuiltinToolReturnPart`
-- [ ] 9. `supported_builtin_tools`: add `ToolSearchTool`
+- [x] 1. Add `ToolSearchTool` builtin to `builtin_tools.py`
+- [x] 2. Bump anthropic SDK to `>= 0.86.0` in `pyproject.toml`
+- [x] 3. `_map_tool_definition`: pass `defer_loading` through to `BetaToolParam`
+- [x] 4. `_add_builtin_tools`: handle `ToolSearchTool` → add tool_search_tool_bm25/regex
+- [x] 5. `_map_server_tool_use_block`: handle `tool_search_tool_*` names
+- [x] 6. `_process_response`: handle `ToolSearchToolResultBlock`
+- [x] 7. Streaming: handle tool_search blocks in `_get_event_iterator`
+- [x] 8. Message history replay: reconstruct tool_search blocks from `BuiltinToolCallPart`/`BuiltinToolReturnPart`
+- [x] 9. `supported_builtin_tools`: add `ToolSearchTool`
 
 ### OpenAI (follow-up)
 - [ ] 10. `_get_builtin_tools`: add `tool_search` when `ToolSearchTool` present
