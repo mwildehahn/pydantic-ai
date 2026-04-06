@@ -1,0 +1,117 @@
+interactions:
+- request:
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, br, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '1577'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+    method: POST
+    parsed_body:
+      include:
+      - reasoning.encrypted_content
+      input:
+      - content: What is the current exchange rate from USD to EUR?
+        role: user
+      instructions: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools
+        before answering.
+      model: gpt-5.4-mini
+      stream: false
+      tool_choice: auto
+      tools:
+      - type: tool_search
+      - description: Get the current weather for a city.
+        name: get_weather
+        parameters:
+          additionalProperties: false
+          properties:
+            city:
+              type: string
+          required:
+          - city
+          type: object
+        strict: true
+        type: function
+      - description: Look up the current exchange rate between two currencies.
+        name: get_exchange_rate
+        parameters:
+          additionalProperties: false
+          properties:
+            from_currency:
+              type: string
+            to_currency:
+              type: string
+          required:
+          - from_currency
+          - to_currency
+          type: object
+        strict: true
+        type: function
+      - description: Look up stock price by ticker symbol.
+        name: stock_lookup
+        parameters:
+          additionalProperties: false
+          properties:
+            symbol:
+              type: string
+          required:
+          - symbol
+          type: object
+        strict: true
+        type: function
+      - description: Calculate monthly mortgage payment for a home loan.
+        name: mortgage_calculator
+        parameters:
+          additionalProperties: false
+          properties:
+            principal:
+              type: number
+            rate:
+              type: number
+            years:
+              type: integer
+          required:
+          - principal
+          - rate
+          - years
+          type: object
+        strict: true
+        type: function
+    uri: https://api.openai.com/v1/responses
+  response:
+    headers:
+      alt-svc:
+      - h3=":443"; ma=86400
+      connection:
+      - keep-alive
+      content-length:
+      - '193'
+      content-type:
+      - application/json
+      openai-organization:
+      - user-wdn2cfboyj9ufhmyxbu72paq
+      openai-processing-ms:
+      - '84'
+      openai-project:
+      - proj_shEOCB48WxkAwxdsguaTTjDo
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+    parsed_body:
+      error:
+        code: null
+        message: 'Invalid Value: ''tools.tool_search''. tools.tool_search requires at least one deferred tool.'
+        param: tools.tool_search
+        type: invalid_request_error
+    status:
+      code: 400
+      message: Bad Request
+version: 1
