@@ -1623,9 +1623,17 @@ class OpenAIResponsesModel(Model):
                             )
                         )
             elif isinstance(item, responses.ResponseFunctionToolCall):
+                tc_provider_details: dict[str, Any] | None = None
+                if item.namespace:
+                    tc_provider_details = {'namespace': item.namespace}
                 items.append(
                     ToolCallPart(
-                        item.name, item.arguments, tool_call_id=item.call_id, id=item.id, provider_name=self.system
+                        item.name,
+                        item.arguments,
+                        tool_call_id=item.call_id,
+                        id=item.id,
+                        provider_name=self.system,
+                        provider_details=tc_provider_details,
                     )
                 )
             elif isinstance(item, responses.ResponseCodeInterpreterToolCall):
@@ -1906,7 +1914,34 @@ class OpenAIResponsesModel(Model):
             reasoning['summary'] = reasoning_summary
         return reasoning or OMIT
 
-    def _get_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.FunctionToolParam]:
+    def _get_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:
+        has_tool_search = any(isinstance(t, ToolSearchTool) for t in model_request_parameters.builtin_tools)
+        has_deferred = any(td.defer_loading for td in model_request_parameters.tool_defs.values())
+
+        if has_tool_search and has_deferred:
+            # OpenAI requires deferred tools wrapped in a namespace for tool_search to work
+            namespace_tools: list[responses.namespace_tool_param.ToolFunction] = []
+            for td in model_request_parameters.tool_defs.values():
+                tool_fn: responses.namespace_tool_param.ToolFunction = {
+                    'type': 'function',
+                    'name': td.name,
+                    'description': td.description,
+                    'parameters': td.parameters_json_schema,
+                }
+                if td.defer_loading:
+                    tool_fn['defer_loading'] = True
+                if td.strict and OpenAIModelProfile.from_profile(self.profile).openai_supports_strict_tool_definition:
+                    tool_fn['strict'] = td.strict
+                namespace_tools.append(tool_fn)
+            return [
+                responses.NamespaceToolParam(
+                    type='namespace',
+                    name='tools',
+                    description='Available tools.',
+                    tools=namespace_tools,
+                )
+            ]
+
         return [self._map_tool_definition(r) for r in model_request_parameters.tool_defs.values()]
 
     def _get_builtin_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:  # noqa: C901
@@ -2125,6 +2160,9 @@ class OpenAIResponsesModel(Model):
                             param['status'] = None  # type: ignore[reportGeneralTypeIssues]
                         if id and should_send_item_id:  # pragma: no branch
                             param['id'] = id
+                        # Preserve namespace for tools wrapped in NamespaceToolParam (tool_search)
+                        if item.provider_details and (ns := item.provider_details.get('namespace')):
+                            param['namespace'] = ns
                         openai_messages.append(param)
                     elif isinstance(item, BuiltinToolCallPart):
                         if should_send_item_id:  # pragma: no branch
@@ -2695,6 +2733,9 @@ class OpenAIResponsesStreamedResponse(StreamedResponse):
 
                 elif isinstance(chunk, responses.ResponseOutputItemAddedEvent):
                     if isinstance(chunk.item, responses.ResponseFunctionToolCall):
+                        tc_details: dict[str, Any] | None = None
+                        if chunk.item.namespace:
+                            tc_details = {'namespace': chunk.item.namespace}
                         yield self._parts_manager.handle_tool_call_part(
                             vendor_part_id=chunk.item.id,
                             tool_name=chunk.item.name,
@@ -2702,6 +2743,7 @@ class OpenAIResponsesStreamedResponse(StreamedResponse):
                             tool_call_id=chunk.item.call_id,
                             id=chunk.item.id,
                             provider_name=self.provider_name,
+                            provider_details=tc_details,
                         )
                     elif isinstance(chunk.item, responses.ResponseReasoningItem):
                         pass

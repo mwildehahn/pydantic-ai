@@ -8,7 +8,7 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1577'
+      - '1732'
       content-type:
       - application/json
       host:
@@ -27,63 +27,70 @@ interactions:
       tool_choice: auto
       tools:
       - type: tool_search
-      - description: Get the current weather for a city.
-        name: get_weather
-        parameters:
-          additionalProperties: false
-          properties:
-            city:
-              type: string
-          required:
-          - city
-          type: object
-        strict: true
-        type: function
-      - description: Look up the current exchange rate between two currencies.
-        name: get_exchange_rate
-        parameters:
-          additionalProperties: false
-          properties:
-            from_currency:
-              type: string
-            to_currency:
-              type: string
-          required:
-          - from_currency
-          - to_currency
-          type: object
-        strict: true
-        type: function
-      - description: Look up stock price by ticker symbol.
-        name: stock_lookup
-        parameters:
-          additionalProperties: false
-          properties:
-            symbol:
-              type: string
-          required:
-          - symbol
-          type: object
-        strict: true
-        type: function
-      - description: Calculate monthly mortgage payment for a home loan.
-        name: mortgage_calculator
-        parameters:
-          additionalProperties: false
-          properties:
-            principal:
-              type: number
-            rate:
-              type: number
-            years:
-              type: integer
-          required:
-          - principal
-          - rate
-          - years
-          type: object
-        strict: true
-        type: function
+      - description: Available tools.
+        name: tools
+        tools:
+        - description: Get the current weather for a city.
+          name: get_weather
+          parameters:
+            additionalProperties: false
+            properties:
+              city:
+                type: string
+            required:
+            - city
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up the current exchange rate between two currencies.
+          name: get_exchange_rate
+          parameters:
+            additionalProperties: false
+            properties:
+              from_currency:
+                type: string
+              to_currency:
+                type: string
+            required:
+            - from_currency
+            - to_currency
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up stock price by ticker symbol.
+          name: stock_lookup
+          parameters:
+            additionalProperties: false
+            properties:
+              symbol:
+                type: string
+            required:
+            - symbol
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Calculate monthly mortgage payment for a home loan.
+          name: mortgage_calculator
+          parameters:
+            additionalProperties: false
+            properties:
+              principal:
+                type: number
+              rate:
+                type: number
+              years:
+                type: integer
+            required:
+            - principal
+            - rate
+            - years
+            type: object
+          strict: true
+          type: function
+        type: namespace
     uri: https://api.openai.com/v1/responses
   response:
     headers:
@@ -92,26 +99,529 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '193'
+      - '4327'
       content-type:
       - application/json
       openai-organization:
       - user-wdn2cfboyj9ufhmyxbu72paq
       openai-processing-ms:
-      - '84'
+      - '1211'
       openai-project:
       - proj_shEOCB48WxkAwxdsguaTTjDo
       openai-version:
       - '2020-10-01'
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
     parsed_body:
-      error:
-        code: null
-        message: 'Invalid Value: ''tools.tool_search''. tools.tool_search requires at least one deferred tool.'
-        param: tools.tool_search
-        type: invalid_request_error
+      background: false
+      billing:
+        payer: developer
+      completed_at: 1775511031
+      created_at: 1775511031
+      error: null
+      frequency_penalty: 0.0
+      id: resp_020e526d0978e04a0069d425f6ec2c8195ac25f4dbb71c6108
+      incomplete_details: null
+      instructions: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools
+        before answering.
+      max_output_tokens: null
+      max_tool_calls: null
+      metadata: {}
+      model: gpt-5.4-mini-2026-03-17
+      object: response
+      output:
+      - arguments:
+          paths:
+          - tools
+        call_id: null
+        execution: server
+        id: tsc_020e526d0978e04a0069d425f7721881958ecd87fc6fab0f63
+        status: completed
+        type: tool_search_call
+      - call_id: null
+        execution: server
+        id: tso_020e526d0978e04a0069d425f78a608195bd69858a156a3469
+        status: completed
+        tools:
+        - description: Available tools.
+          name: tools
+          tools:
+          - defer_loading: true
+            description: Look up the current exchange rate between two currencies.
+            name: get_exchange_rate
+            parameters:
+              additionalProperties: false
+              properties:
+                from_currency:
+                  type: string
+                to_currency:
+                  type: string
+              required:
+              - from_currency
+              - to_currency
+              type: object
+            strict: true
+            type: function
+          - defer_loading: true
+            description: Look up stock price by ticker symbol.
+            name: stock_lookup
+            parameters:
+              additionalProperties: false
+              properties:
+                symbol:
+                  type: string
+              required:
+              - symbol
+              type: object
+            strict: true
+            type: function
+          - defer_loading: true
+            description: Calculate monthly mortgage payment for a home loan.
+            name: mortgage_calculator
+            parameters:
+              additionalProperties: false
+              properties:
+                principal:
+                  type: number
+                rate:
+                  type: number
+                years:
+                  type: integer
+              required:
+              - principal
+              - rate
+              - years
+              type: object
+            strict: true
+            type: function
+          type: namespace
+        type: tool_search_output
+      - arguments: '{"from_currency":"USD","to_currency":"EUR"}'
+        call_id: call_fvbSkWPtSaYyFIeDAoNkI2vu
+        id: fc_020e526d0978e04a0069d425f7acec81958264f827927ef25e
+        name: get_exchange_rate
+        namespace: tools
+        status: completed
+        type: function_call
+      parallel_tool_calls: true
+      presence_penalty: 0.0
+      previous_response_id: null
+      prompt_cache_key: null
+      prompt_cache_retention: null
+      reasoning:
+        effort: none
+        summary: null
+      safety_identifier: null
+      service_tier: default
+      status: completed
+      store: true
+      temperature: 1.0
+      text:
+        format:
+          type: text
+        verbosity: medium
+      tool_choice: auto
+      tools:
+      - description: null
+        parameters: null
+        type: tool_search
+      - description: Available tools.
+        name: tools
+        tools:
+        - description: Get the current weather for a city.
+          name: get_weather
+          parameters:
+            additionalProperties: false
+            properties:
+              city:
+                type: string
+            required:
+            - city
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up the current exchange rate between two currencies.
+          name: get_exchange_rate
+          parameters:
+            additionalProperties: false
+            properties:
+              from_currency:
+                type: string
+              to_currency:
+                type: string
+            required:
+            - from_currency
+            - to_currency
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up stock price by ticker symbol.
+          name: stock_lookup
+          parameters:
+            additionalProperties: false
+            properties:
+              symbol:
+                type: string
+            required:
+            - symbol
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Calculate monthly mortgage payment for a home loan.
+          name: mortgage_calculator
+          parameters:
+            additionalProperties: false
+            properties:
+              principal:
+                type: number
+              rate:
+                type: number
+              years:
+                type: integer
+            required:
+            - principal
+            - rate
+            - years
+            type: object
+          strict: true
+          type: function
+        type: namespace
+      top_logprobs: 0
+      top_p: 0.98
+      truncation: disabled
+      usage:
+        input_tokens: 677
+        input_tokens_details:
+          cached_tokens: 0
+        output_tokens: 44
+        output_tokens_details:
+          reasoning_tokens: 19
+        total_tokens: 721
+      user: null
     status:
-      code: 400
-      message: Bad Request
+      code: 200
+      message: OK
+- request:
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, br, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '3549'
+      content-type:
+      - application/json
+      cookie:
+      - __cf_bm=IwycLUbVEQStEwP0aTW2GJSeODlSFD5HK1sLE4GPN94-1775511030.4877465-1.0.1.1-63wL3sNcVq9NykLWDcvRI761LrzmZFAdQuvl2erixbkSzLnlWCgD0Xmig_fPR5JzK08IeONCaLm00vOBuQdbxwLyQlQfM2fKPUOdDMcuG5OpezAE3.5bZUUBqTcvvSwt
+      host:
+      - api.openai.com
+    method: POST
+    parsed_body:
+      include:
+      - reasoning.encrypted_content
+      input:
+      - content: What is the current exchange rate from USD to EUR?
+        role: user
+      - arguments:
+          paths:
+          - tools
+        id: tsc_020e526d0978e04a0069d425f7721881958ecd87fc6fab0f63
+        status: completed
+        type: tool_search_call
+      - call_id: tso_020e526d0978e04a0069d425f78a608195bd69858a156a3469
+        id: tso_020e526d0978e04a0069d425f78a608195bd69858a156a3469
+        status: completed
+        tools:
+        - description: Available tools.
+          name: tools
+          tools:
+          - defer_loading: true
+            description: Look up the current exchange rate between two currencies.
+            name: get_exchange_rate
+            parameters:
+              additionalProperties: false
+              properties:
+                from_currency:
+                  type: string
+                to_currency:
+                  type: string
+              required:
+              - from_currency
+              - to_currency
+              type: object
+            strict: true
+            type: function
+          - defer_loading: true
+            description: Look up stock price by ticker symbol.
+            name: stock_lookup
+            parameters:
+              additionalProperties: false
+              properties:
+                symbol:
+                  type: string
+              required:
+              - symbol
+              type: object
+            strict: true
+            type: function
+          - defer_loading: true
+            description: Calculate monthly mortgage payment for a home loan.
+            name: mortgage_calculator
+            parameters:
+              additionalProperties: false
+              properties:
+                principal:
+                  type: number
+                rate:
+                  type: number
+                years:
+                  type: integer
+              required:
+              - principal
+              - rate
+              - years
+              type: object
+            strict: true
+            type: function
+          type: namespace
+        type: tool_search_output
+      - arguments: '{"from_currency":"USD","to_currency":"EUR"}'
+        call_id: call_fvbSkWPtSaYyFIeDAoNkI2vu
+        id: fc_020e526d0978e04a0069d425f7acec81958264f827927ef25e
+        name: get_exchange_rate
+        namespace: tools
+        type: function_call
+      - call_id: call_fvbSkWPtSaYyFIeDAoNkI2vu
+        output: 1 USD = 0.92 EUR
+        type: function_call_output
+      instructions: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools
+        before answering.
+      model: gpt-5.4-mini
+      stream: false
+      tool_choice: auto
+      tools:
+      - type: tool_search
+      - description: Available tools.
+        name: tools
+        tools:
+        - description: Get the current weather for a city.
+          name: get_weather
+          parameters:
+            additionalProperties: false
+            properties:
+              city:
+                type: string
+            required:
+            - city
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up the current exchange rate between two currencies.
+          name: get_exchange_rate
+          parameters:
+            additionalProperties: false
+            properties:
+              from_currency:
+                type: string
+              to_currency:
+                type: string
+            required:
+            - from_currency
+            - to_currency
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up stock price by ticker symbol.
+          name: stock_lookup
+          parameters:
+            additionalProperties: false
+            properties:
+              symbol:
+                type: string
+            required:
+            - symbol
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Calculate monthly mortgage payment for a home loan.
+          name: mortgage_calculator
+          parameters:
+            additionalProperties: false
+            properties:
+              principal:
+                type: number
+              rate:
+                type: number
+              years:
+                type: integer
+            required:
+            - principal
+            - rate
+            - years
+            type: object
+          strict: true
+          type: function
+        type: namespace
+    uri: https://api.openai.com/v1/responses
+  response:
+    headers:
+      alt-svc:
+      - h3=":443"; ma=86400
+      connection:
+      - keep-alive
+      content-length:
+      - '2872'
+      content-type:
+      - application/json
+      openai-organization:
+      - user-wdn2cfboyj9ufhmyxbu72paq
+      openai-processing-ms:
+      - '919'
+      openai-project:
+      - proj_shEOCB48WxkAwxdsguaTTjDo
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+    parsed_body:
+      background: false
+      billing:
+        payer: developer
+      completed_at: 1775511033
+      created_at: 1775511032
+      error: null
+      frequency_penalty: 0.0
+      id: resp_020e526d0978e04a0069d425f89d1c81959ad049c8cda56230
+      incomplete_details: null
+      instructions: You have access to tools that may not be immediately visible. Use tool search to discover relevant tools
+        before answering.
+      max_output_tokens: null
+      max_tool_calls: null
+      metadata: {}
+      model: gpt-5.4-mini-2026-03-17
+      object: response
+      output:
+      - content:
+        - annotations: []
+          logprobs: []
+          text: The current exchange rate is **1 USD = 0.92 EUR**.
+          type: output_text
+        id: msg_020e526d0978e04a0069d425f90cac8195b5712baa87d781e5
+        phase: final_answer
+        role: assistant
+        status: completed
+        type: message
+      parallel_tool_calls: true
+      presence_penalty: 0.0
+      previous_response_id: null
+      prompt_cache_key: null
+      prompt_cache_retention: null
+      reasoning:
+        effort: none
+        summary: null
+      safety_identifier: null
+      service_tier: default
+      status: completed
+      store: true
+      temperature: 1.0
+      text:
+        format:
+          type: text
+        verbosity: medium
+      tool_choice: auto
+      tools:
+      - description: null
+        parameters: null
+        type: tool_search
+      - description: Available tools.
+        name: tools
+        tools:
+        - description: Get the current weather for a city.
+          name: get_weather
+          parameters:
+            additionalProperties: false
+            properties:
+              city:
+                type: string
+            required:
+            - city
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up the current exchange rate between two currencies.
+          name: get_exchange_rate
+          parameters:
+            additionalProperties: false
+            properties:
+              from_currency:
+                type: string
+              to_currency:
+                type: string
+            required:
+            - from_currency
+            - to_currency
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Look up stock price by ticker symbol.
+          name: stock_lookup
+          parameters:
+            additionalProperties: false
+            properties:
+              symbol:
+                type: string
+            required:
+            - symbol
+            type: object
+          strict: true
+          type: function
+        - defer_loading: true
+          description: Calculate monthly mortgage payment for a home loan.
+          name: mortgage_calculator
+          parameters:
+            additionalProperties: false
+            properties:
+              principal:
+                type: number
+              rate:
+                type: number
+              years:
+                type: integer
+            required:
+            - principal
+            - rate
+            - years
+            type: object
+          strict: true
+          type: function
+        type: namespace
+      top_logprobs: 0
+      top_p: 0.98
+      truncation: disabled
+      usage:
+        input_tokens: 722
+        input_tokens_details:
+          cached_tokens: 0
+        output_tokens: 20
+        output_tokens_details:
+          reasoning_tokens: 0
+        total_tokens: 742
+      user: null
+    status:
+      code: 200
+      message: OK
 version: 1

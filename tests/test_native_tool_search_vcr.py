@@ -273,17 +273,11 @@ async def test_pydantic_ai_anthropic_native_tool_search(allow_model_requests: No
 
 
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')
-@pytest.mark.skip(
-    reason='OpenAI tool_search requires namespace tools with defer_loading — needs further integration work'
-)
 async def test_pydantic_ai_openai_native_tool_search(allow_model_requests: None) -> None:
     """Test pydantic-ai agent with ToolSearchTool builtin on OpenAI Responses.
 
     The agent should use native tool search to discover get_exchange_rate
     and call it without the synthetic search_tools tool.
-
-    NOTE: OpenAI requires tools to be wrapped in a namespace with defer_loading
-    for tool_search to work. This requires additional adapter changes.
     """
     agent = _build_native_search_agent('openai-responses:gpt-5.4-mini')
     result = await agent.run('What is the current exchange rate from USD to EUR?')
