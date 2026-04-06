@@ -33,6 +33,7 @@ from ..builtin_tools import (
     ImageAspectRatio,
     ImageGenerationTool,
     MCPServerTool,
+    ToolSearchTool,
     WebSearchTool,
 )
 from ..capabilities.abstract import AbstractCapability
@@ -1535,7 +1536,9 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
     @classmethod
     def supported_builtin_tools(cls) -> frozenset[type[AbstractBuiltinTool]]:
         """Return the set of builtin tool types this model can handle."""
-        return frozenset({WebSearchTool, CodeExecutionTool, FileSearchTool, MCPServerTool, ImageGenerationTool})
+        return frozenset(
+            {WebSearchTool, CodeExecutionTool, FileSearchTool, MCPServerTool, ImageGenerationTool, ToolSearchTool}
+        )
 
     async def compact_messages(
         self,
@@ -1785,6 +1788,24 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
             elif isinstance(item, responses.response_output_item.McpApprovalRequest):  # pragma: no cover
                 # Pydantic AI doesn't yet support McpApprovalRequest (explicit tool usage approval)
                 pass
+            elif isinstance(item, responses.ResponseToolSearchCall):
+                items.append(
+                    BuiltinToolCallPart(
+                        provider_name=self.system,
+                        tool_name=ToolSearchTool.kind,
+                        args={'arguments': item.arguments} if item.arguments else None,
+                        tool_call_id=item.call_id or item.id,
+                    )
+                )
+            elif isinstance(item, responses.ResponseToolSearchOutputItem):
+                items.append(
+                    BuiltinToolReturnPart(
+                        provider_name=self.system,
+                        tool_name=ToolSearchTool.kind,
+                        content={'tools': [t.model_dump(mode='json') for t in item.tools]},
+                        tool_call_id=item.call_id or item.id,
+                    )
+                )
 
         finish_reason: FinishReason | None = None
         provider_details: dict[str, Any] = {}
@@ -2008,7 +2029,7 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
     def _get_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.FunctionToolParam]:
         return [self._map_tool_definition(r) for r in model_request_parameters.tool_defs.values()]
 
-    def _get_builtin_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:
+    def _get_builtin_tools(self, model_request_parameters: ModelRequestParameters) -> list[responses.ToolParam]:  # noqa: C901
         tools: list[responses.ToolParam] = []
         has_image_generating_tool = False
         for tool in model_request_parameters.builtin_tools:
@@ -2077,6 +2098,8 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
                         size=size,
                     )
                 )
+            elif isinstance(tool, ToolSearchTool):
+                tools.append(responses.ToolSearchToolParam(type='tool_search'))
             else:
                 raise UserError(  # pragma: no cover
                     f'`{tool.__class__.__name__}` is not supported by `OpenAIResponsesModel`. If it should be, please file an issue.'
@@ -2279,6 +2302,15 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
                                     },
                                 )
                                 openai_messages.append(image_generation_item)
+                            elif item.tool_name == ToolSearchTool.kind and item.tool_call_id:
+                                args = item.args_as_dict() or {}
+                                tool_search_call_item: responses.response_input_item_param.ToolSearchCall = {
+                                    'id': item.id or item.tool_call_id,
+                                    'type': 'tool_search_call',
+                                    'status': 'completed',
+                                    'arguments': args.get('arguments', {}),
+                                }
+                                openai_messages.append(tool_search_call_item)
                             elif (  # pragma: no branch
                                 item.tool_name.startswith(MCPServerTool.kind)
                                 and item.tool_call_id
@@ -2323,6 +2355,15 @@ class OpenAIResponsesModel(Model[AsyncOpenAI]):
                             elif item.tool_name == ImageGenerationTool.kind:
                                 # Image generation result does not need to be sent back, just the `id` off of `BuiltinToolCallPart`.
                                 pass
+                            elif item.tool_name == ToolSearchTool.kind and item.tool_call_id:
+                                tool_search_output_item: responses.ResponseToolSearchOutputItemParamParam = {
+                                    'id': item.tool_call_id,
+                                    'type': 'tool_search_output',
+                                    'status': 'completed',
+                                    'tools': item.content.get('tools', []) if _is_str_dict(item.content) else [],
+                                    'call_id': item.tool_call_id,
+                                }
+                                openai_messages.append(tool_search_output_item)
                             elif item.tool_name.startswith(MCPServerTool.kind):  # pragma: no branch
                                 # MCP call result does not need to be sent back, just the fields off of `BuiltinToolCallPart`.
                                 pass
@@ -2853,6 +2894,26 @@ class OpenAIResponsesStreamedResponse(StreamedResponse):
                     elif isinstance(chunk.item, responses.response_output_item.McpListTools):
                         call_part, _ = _map_mcp_list_tools(chunk.item, self.provider_name)
                         yield self._parts_manager.handle_part(vendor_part_id=f'{chunk.item.id}-call', part=call_part)
+                    elif isinstance(chunk.item, responses.ResponseToolSearchCall):
+                        yield self._parts_manager.handle_part(
+                            vendor_part_id=f'{chunk.item.id}-call',
+                            part=BuiltinToolCallPart(
+                                provider_name=self.provider_name,
+                                tool_name=ToolSearchTool.kind,
+                                args={'arguments': chunk.item.arguments} if chunk.item.arguments else None,
+                                tool_call_id=chunk.item.call_id or chunk.item.id,
+                            ),
+                        )
+                    elif isinstance(chunk.item, responses.ResponseToolSearchOutputItem):
+                        yield self._parts_manager.handle_part(
+                            vendor_part_id=f'{chunk.item.id}-return',
+                            part=BuiltinToolReturnPart(
+                                provider_name=self.provider_name,
+                                tool_name=ToolSearchTool.kind,
+                                content={'tools': [t.model_dump(mode='json') for t in chunk.item.tools]},
+                                tool_call_id=chunk.item.call_id or chunk.item.id,
+                            ),
+                        )
                     else:
                         warnings.warn(  # pragma: no cover
                             f'Handling of this item type is not yet implemented. Please report on our GitHub: {chunk}',
