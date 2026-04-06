@@ -90,10 +90,10 @@ Tool(defer_loading=True)
 - [x] 9. `supported_builtin_tools`: add `ToolSearchTool`
 
 ### OpenAI (follow-up)
-- [ ] 10. `_get_builtin_tools`: add `tool_search` when `ToolSearchTool` present
-- [ ] 11. Response parsing: `ResponseToolSearchCall` / `ResponseToolSearchOutputItem`
-- [ ] 12. Message history replay
-- [ ] 13. Streaming
+- [x] 10. `_get_builtin_tools`: add `tool_search` when `ToolSearchTool` present
+- [x] 11. Response parsing: `ResponseToolSearchCall` / `ResponseToolSearchOutputItem`
+- [x] 12. Message history replay
+- [x] 13. Streaming
 
 ### Cross-cutting
 - [ ] 14. Model profiles: `supports_native_tool_search` capability flag
