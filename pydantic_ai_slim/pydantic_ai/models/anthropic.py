@@ -18,6 +18,7 @@ from ..builtin_tools import (
     CodeExecutionTool,
     MCPServerTool,
     MemoryTool,
+    ToolSearchTool,
     WebFetchTool,
     WebSearchTool,
 )
@@ -138,6 +139,10 @@ try:
         BetaThinkingDelta,
         BetaToolChoiceParam,
         BetaToolParam,
+        BetaToolSearchToolBm25_20251119Param,
+        BetaToolSearchToolRegex20251119Param,
+        BetaToolSearchToolResultBlock,
+        BetaToolSearchToolResultBlockParam,
         BetaToolUnionParam,
         BetaToolUseBlock,
         BetaToolUseBlockParam,
@@ -339,7 +344,7 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
     @classmethod
     def supported_builtin_tools(cls) -> frozenset[type[AbstractBuiltinTool]]:
         """The set of builtin tool types this model can handle."""
-        return frozenset({WebSearchTool, CodeExecutionTool, WebFetchTool, MemoryTool, MCPServerTool})
+        return frozenset({WebSearchTool, CodeExecutionTool, WebFetchTool, MemoryTool, MCPServerTool, ToolSearchTool})
 
     async def request(
         self,
@@ -643,6 +648,8 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
                 items.append(_map_code_execution_tool_result_block(item, self.system))
             elif isinstance(item, BetaWebFetchToolResultBlock):
                 items.append(_map_web_fetch_tool_result_block(item, self.system))
+            elif isinstance(item, BetaToolSearchToolResultBlock):
+                items.append(_map_tool_search_result_block(item, self.system))
             elif isinstance(item, BetaRedactedThinkingBlock):
                 items.append(
                     ThinkingPart(id='redacted_thinking', content='', signature=item.data, provider_name=self.system)
@@ -767,6 +774,21 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
                 tools = [tool for tool in tools if tool.get('name') != 'memory']
                 tools.append(BetaMemoryTool20250818Param(name='memory', type='memory_20250818'))
                 beta_features.add('context-management-2025-06-27')
+            elif isinstance(tool, ToolSearchTool):
+                if tool.search_type == 'regex':
+                    tools.append(
+                        BetaToolSearchToolRegex20251119Param(
+                            name='tool_search_tool_regex',
+                            type='tool_search_tool_regex_20251119',
+                        )
+                    )
+                else:
+                    tools.append(
+                        BetaToolSearchToolBm25_20251119Param(
+                            name='tool_search_tool_bm25',
+                            type='tool_search_tool_bm25_20251119',
+                        )
+                    )
             elif isinstance(tool, MCPServerTool) and tool.url:
                 mcp_server_url_definition_param = BetaRequestMCPServerURLDefinitionParam(
                     type='url',
@@ -893,6 +915,7 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
                     | BetaWebSearchToolResultBlockParam
                     | BetaCodeExecutionToolResultBlockParam
                     | BetaWebFetchToolResultBlockParam
+                    | BetaToolSearchToolResultBlockParam
                     | BetaThinkingBlockParam
                     | BetaRedactedThinkingBlockParam
                     | BetaMCPToolUseBlockParam
@@ -964,6 +987,14 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
                                     input=response_part.args_as_dict(),
                                 )
                                 assistant_content_params.append(server_tool_use_block_param)
+                            elif response_part.tool_name == ToolSearchTool.kind:
+                                server_tool_use_block_param = BetaServerToolUseBlockParam(
+                                    id=tool_use_id,
+                                    type='server_tool_use',
+                                    name='tool_search_tool_bm25',
+                                    input=response_part.args_as_dict(),
+                                )
+                                assistant_content_params.append(server_tool_use_block_param)
                             elif (
                                 response_part.tool_name.startswith(MCPServerTool.kind)
                                 and (server_id := response_part.tool_name.split(':', 1)[1])
@@ -1021,6 +1052,16 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
                                             WebFetchToolResultBlockParamContent,
                                             response_part.content,  # pyright: ignore[reportUnknownMemberType]
                                         ),
+                                    )
+                                )
+                            elif response_part.tool_name == ToolSearchTool.kind and isinstance(
+                                response_part.content, dict
+                            ):
+                                assistant_content_params.append(
+                                    BetaToolSearchToolResultBlockParam(
+                                        tool_use_id=tool_use_id,
+                                        type='tool_search_tool_result',
+                                        content=response_part.content,  # pyright: ignore[reportArgumentType,reportUnknownMemberType]
                                     )
                                 )
                             elif response_part.tool_name.startswith(MCPServerTool.kind) and isinstance(
@@ -1338,6 +1379,8 @@ class AnthropicModel(Model[AsyncAnthropicClient]):
             'description': f.description or '',
             'input_schema': f.parameters_json_schema,
         }
+        if f.defer_loading:
+            tool_param['defer_loading'] = True
         if f.strict and self.profile.supports_json_schema_output:
             tool_param['strict'] = f.strict
         if model_settings.get('anthropic_eager_input_streaming'):
@@ -1554,6 +1597,11 @@ class AnthropicStreamedResponse(StreamedResponse):
                             vendor_part_id=event.index,
                             part=_map_web_fetch_tool_result_block(current_block, self.provider_name),
                         )
+                    elif isinstance(current_block, BetaToolSearchToolResultBlock):
+                        yield self._parts_manager.handle_part(
+                            vendor_part_id=event.index,
+                            part=_map_tool_search_result_block(current_block, self.provider_name),
+                        )
                     elif isinstance(current_block, BetaMCPToolUseBlock):
                         call_part = _map_mcp_server_use_block(current_block, self.provider_name)
                         builtin_tool_calls[call_part.tool_call_id] = call_part
@@ -1692,9 +1740,13 @@ def _map_server_tool_use_block(item: BetaServerToolUseBlock, provider_name: str)
         )
     elif item.name in ('bash_code_execution', 'text_editor_code_execution'):  # pragma: no cover
         raise NotImplementedError(f'Anthropic built-in tool {item.name!r} is not currently supported.')
-    elif item.name in ('tool_search_tool_regex', 'tool_search_tool_bm25'):  # pragma: no cover
-        # NOTE this is being implemented in https://github.com/pydantic/pydantic-ai/pull/3550
-        raise NotImplementedError(f'Anthropic built-in tool {item.name!r} is not currently supported.')
+    elif item.name in ('tool_search_tool_regex', 'tool_search_tool_bm25'):
+        return BuiltinToolCallPart(
+            provider_name=provider_name,
+            tool_name=ToolSearchTool.kind,
+            args=tool_args,
+            tool_call_id=item.id,
+        )
     else:
         assert_never(item.name)
 
@@ -1734,6 +1786,15 @@ def _map_web_fetch_tool_result_block(item: BetaWebFetchToolResultBlock, provider
         provider_name=provider_name,
         tool_name=WebFetchTool.kind,
         # Store just the content field (BetaWebFetchBlock) which has {content, type, url, retrieved_at}
+        content=item.content.model_dump(mode='json'),
+        tool_call_id=item.tool_use_id,
+    )
+
+
+def _map_tool_search_result_block(item: BetaToolSearchToolResultBlock, provider_name: str) -> BuiltinToolReturnPart:
+    return BuiltinToolReturnPart(
+        provider_name=provider_name,
+        tool_name=ToolSearchTool.kind,
         content=item.content.model_dump(mode='json'),
         tool_call_id=item.tool_use_id,
     )

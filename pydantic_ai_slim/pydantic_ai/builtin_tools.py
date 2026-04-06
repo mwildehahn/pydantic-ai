@@ -20,6 +20,7 @@ __all__ = (
     'MemoryTool',
     'MCPServerTool',
     'FileSearchTool',
+    'ToolSearchTool',
     'BUILTIN_TOOL_TYPES',
     'DEPRECATED_BUILTIN_TOOLS',
     'SUPPORTED_BUILTIN_TOOLS',
@@ -476,6 +477,33 @@ def _tool_discriminator(tool_data: dict[str, Any] | AbstractBuiltinTool) -> str:
 
 DEPRECATED_BUILTIN_TOOLS: frozenset[type[AbstractBuiltinTool]] = frozenset({UrlContextTool})  # pyright: ignore[reportDeprecated]
 """Set of deprecated builtin tool IDs that should not be offered in new UIs."""
+
+
+@dataclass(kw_only=True)
+class ToolSearchTool(AbstractBuiltinTool):
+    """A builtin tool that enables native provider-side tool search for deferred tools.
+
+    When added to an agent's builtin tools, tools marked with `defer_loading=True` will use
+    the provider's native tool search instead of the client-side `search_tools` synthetic tool.
+
+    Supported by:
+
+    * Anthropic (BM25 and regex search)
+    * OpenAI Responses (server-side search)
+    """
+
+    search_type: Literal['bm25', 'regex'] = 'bm25'
+    """The search algorithm to use for tool discovery.
+
+    Only applies to Anthropic. OpenAI uses server-side search automatically.
+
+    * `'bm25'` — BM25 ranking over tool names and descriptions (default)
+    * `'regex'` — Regex-based matching over tool names and descriptions
+    """
+
+    kind: str = 'tool_search'
+    """The kind of tool."""
+
 
 SUPPORTED_BUILTIN_TOOLS = frozenset(cls for cls in BUILTIN_TOOL_TYPES.values() if cls not in DEPRECATED_BUILTIN_TOOLS)
 """Get the set of all builtin tool types (excluding deprecated tools)."""
