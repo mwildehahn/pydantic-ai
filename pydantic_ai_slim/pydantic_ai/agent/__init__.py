@@ -49,7 +49,7 @@ from .._template import TemplateStr, validate_from_spec_args
 from ..builtin_tools import AbstractBuiltinTool
 from ..capabilities import AbstractCapability, CombinedCapability
 from ..capabilities._ordering import has_capability_type
-from ..capabilities._tool_search import ToolSearch as ToolSearchCap
+from ..capabilities._tool_search import ToolSearch as ToolSearchCap, has_native_tool_search_builtin
 from ..capabilities.builtin_tool import BuiltinTool as BuiltinToolCap
 from ..capabilities.history_processor import HistoryProcessor as HistoryProcessorCap
 from ..models.instrumented import InstrumentationSettings, InstrumentedModel, instrument_model
@@ -1212,6 +1212,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             return merged
 
         # Build toolset with per-run capability contributions
+        all_builtin_tools = [*cap_builtin_tools, *(builtin_tools or [])]
         toolset = self._get_toolset(
             output_toolset=output_toolset,
             additional_toolsets=toolsets,
@@ -1259,7 +1260,7 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
             output_validators=output_validators,
             validation_context=self._validation_context,
             root_capability=run_capability,
-            builtin_tools=[*cap_builtin_tools, *(builtin_tools or [])],
+            builtin_tools=all_builtin_tools,
             tool_manager=tool_manager,
             tracer=tracer,
             get_instructions=get_instructions,
@@ -2397,6 +2398,9 @@ class Agent(AbstractAgent[AgentDepsT, OutputDataT]):
         # Capability wrapper toolsets (including ToolSearch and CodeMode) are
         # applied here via get_wrapper_toolset. ToolSearch is auto-injected
         # into capabilities, replacing the previous hardcoded ToolSearchToolset wrap.
+        # Users opt into native provider-side tool search by passing
+        # `capabilities=[ToolSearch(native_tool_search=True)]` alongside
+        # `builtin_tools=[ToolSearchTool()]`.
         if run_capability is not None:
             toolset = run_capability.get_wrapper_toolset(toolset) or toolset
 
@@ -2634,9 +2638,18 @@ def _inject_auto_capabilities(capabilities: list[AbstractCapability[Any]]) -> No
 
     Each capability's own ``CapabilityOrdering`` (e.g. ``position='outermost'``)
     determines its final placement, so insertion order here doesn't matter.
+
+    When the user registers the native ``ToolSearchTool`` builtin, the auto-injected
+    ``ToolSearch`` is constructed with ``native_tool_search=True`` so deferred
+    tools pass through to the provider instead of being hidden behind the
+    synthetic ``search_tools`` tool.
     """
     for cap_type in _AUTO_INJECT_CAPABILITY_TYPES:
-        if not has_capability_type(capabilities, cap_type):
+        if has_capability_type(capabilities, cap_type):
+            continue
+        if cap_type is ToolSearchCap and has_native_tool_search_builtin(capabilities):
+            capabilities.append(ToolSearchCap(native_tool_search=True))
+        else:
             capabilities.append(cap_type())
 
 

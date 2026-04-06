@@ -61,7 +61,13 @@ class ToolSearchToolset(WrapperToolset[AgentDepsT]):
 
     Tools with `defer_loading=True` are not initially presented to the model.
     Instead, they become available after the model discovers them via the search tool.
+
+    When `native_tool_search` is True, deferred tools are passed through with
+    `defer_loading=True` preserved on the ToolDefinition. The provider's native
+    tool search handles discovery instead of the synthetic `search_tools` tool.
     """
+
+    native_tool_search: bool = False
 
     async def get_tools(self, ctx: RunContext[AgentDepsT]) -> dict[str, ToolsetTool[AgentDepsT]]:
         all_tools = await self.wrapped.get_tools(ctx)
@@ -75,6 +81,11 @@ class ToolSearchToolset(WrapperToolset[AgentDepsT]):
                 visible[name] = tool
 
         if not deferred:
+            return all_tools
+
+        # When native tool search is active, pass all tools through — deferred tools
+        # keep defer_loading=True and the provider handles discovery natively.
+        if self.native_tool_search:
             return all_tools
 
         if _SEARCH_TOOLS_NAME in all_tools:
